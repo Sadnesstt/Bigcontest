@@ -11,4 +11,5 @@ innovation 분야
 [소개 및 역할분담](https://iewha-my.sharepoint.com/:b:/g/personal/192stg11_i_ewha_ac_kr/EaKUHXsskJZLvEfv5USIQOkBsI0rb_kjae6ZZ7_O7lmhaw?e=QB1h5l)
 
 결과 : 최우수상(GS 리테일상) 수상
+
 2차 발표 : GS리테일 본사 데이터사이언스 팀에서 2차 발표
