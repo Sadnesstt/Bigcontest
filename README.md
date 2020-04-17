@@ -6,6 +6,9 @@ innovation 분야
 환경기상데이터(케이웨더), 유통데이터(GS리테일), 공공데이터 등 다양한 데이터를 활용하여 미세먼지로 인한 소비/경제/행동변화에 따른 사회적 영향 분석 및 예측 모델링을 통한 비즈니스 아이디어 제시
 
 
+[제발](https://iewha-my.sharepoint.com/:b:/g/personal/192stg11_i_ewha_ac_kr/EdzkTCAYt59KjSroG4PpEdABU6fu15BLKY1C9p8uvtJy6Q)
+
+
 결과 : 최우수상(GS 리테일상) 수상
 
 2차 발표 : GS리테일 본사 데이터사이언스 팀에서 2차 발표
