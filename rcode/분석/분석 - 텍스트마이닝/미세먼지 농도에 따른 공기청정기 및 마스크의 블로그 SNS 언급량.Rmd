@@ -1,0 +1,114 @@
+## **미세먼지 농도에 따른 공기청정기 및 마스크의 블로그 SNS 언급량**
+```{r}
+library(tidyverse)
+library(rJava)
+library(tm)
+library(KoNLP)
+library(psycho)
+mydata <- list.files('complete/blog_tdm',pattern='.rds')
+for (i in 1:length(mydata)){
+  assign(mydata[i], read_rds(paste0('complete/blog_tdm/',mydata[i])))
+}
+dust_complete_datemean.rds <- read_rds('complete/dust_complete_datemean.rds')
+dust_day_mean <- dust_complete_datemean.rds %>% group_by(DT) %>% summarise(m_pm10=mean(pm10,na.rm=T), m_pm25=mean(pm25,na.rm=T))
+dust_day_mean$DT <- parse_date(as.character(dust_day_mean$DT), "%Y%m%d")
+```
+
+#### sparse term 줄이기
+```{r}
+blog1.TDM.tf2 <- removeSparseTerms(blog_1.TDM.tf.rds,sparse=0.99)
+blog2.TDM.tf2 <- removeSparseTerms(blog_2.TDM.tf.rds,sparse=0.99)
+blog3.TDM.tf2 <- removeSparseTerms(blog_3.TDM.tf.rds,sparse=0.99)
+blog4.TDM.tf2 <- removeSparseTerms(blog_4.TDM.tf.rds,sparse=0.99)
+blog5.TDM.tf2 <- removeSparseTerms(blog_5.TDM.tf.rds,sparse=0.99)
+blog6.TDM.tf2 <- removeSparseTerms(blog_6.TDM.tf.rds,sparse=0.99)
+blog7.TDM.tf2 <- removeSparseTerms(blog_7.TDM.tf.rds,sparse=0.99)
+blog8.TDM.tf2 <- removeSparseTerms(blog_8.TDM.tf.rds,sparse=0.99)
+blog9.TDM.tf2 <- removeSparseTerms(blog_9.TDM.tf.rds,sparse=0.99)
+blog10.TDM.tf2 <- removeSparseTerms(blog_10.TDM.tf.rds,sparse=0.99)
+blog11.TDM.tf2 <- removeSparseTerms(blog_11.TDM.tf.rds,sparse=0.99)
+blog12.TDM.tf2 <- removeSparseTerms(blog_12.TDM.tf.rds,sparse=0.99)
+
+
+blog1.mat <- as.matrix(blog1.TDM.tf2)
+blog2.mat <- as.matrix(blog2.TDM.tf2)
+blog3.mat <- as.matrix(blog3.TDM.tf2)
+blog4.mat <- as.matrix(blog4.TDM.tf2)
+blog5.mat <- as.matrix(blog5.TDM.tf2)
+blog6.mat <- as.matrix(blog6.TDM.tf2)
+blog7.mat <- as.matrix(blog7.TDM.tf2)
+blog8.mat <- as.matrix(blog8.TDM.tf2)
+blog9.mat <- as.matrix(blog9.TDM.tf2)
+blog10.mat <- as.matrix(blog10.TDM.tf2)
+blog11.mat <- as.matrix(blog11.TDM.tf2)
+blog12.mat <- as.matrix(blog12.TDM.tf2)
+
+
+blog1.dtm <- t(blog1.mat)
+blog2.dtm <- t(blog2.mat)
+blog3.dtm <- t(blog3.mat)
+blog4.dtm <- t(blog4.mat)
+blog5.dtm <- t(blog5.mat)
+blog6.dtm <- t(blog6.mat)
+blog7.dtm <- t(blog7.mat)
+blog8.dtm <- t(blog8.mat)
+blog9.dtm <- t(blog9.mat)
+blog10.dtm <- t(blog10.mat)
+blog11.dtm <- t(blog11.mat)
+blog12.dtm <- t(blog12.mat)
+
+
+blog1.dtm <- as_tibble(blog1.dtm)
+blog2.dtm <- as_tibble(blog2.dtm)
+blog3.dtm <- as_tibble(blog3.dtm)
+blog4.dtm <- as_tibble(blog4.dtm)
+blog5.dtm <- as_tibble(blog5.dtm)
+blog6.dtm <- as_tibble(blog6.dtm)
+blog7.dtm <- as_tibble(blog7.dtm)
+blog8.dtm <- as_tibble(blog8.dtm)
+blog9.dtm <- as_tibble(blog9.dtm)
+blog10.dtm <- as_tibble(blog10.dtm)
+blog11.dtm <- as_tibble(blog11.dtm)
+blog12.dtm <- as_tibble(blog12.dtm)
+
+
+blog_list <- list(blog1.dtm,blog2.dtm,blog3.dtm,blog4.dtm,blog5.dtm,blog6.dtm,
+                  blog7.dtm,blog8.dtm,blog9.dtm,blog10.dtm,blog11.dtm,blog12.dtm)
+
+blog <- read_rds('complete/blog_preprocessed.rds')
+
+
+
+blog_keyword <- function(i){
+  blog_month <- blog %>% filter(month==i)
+  date <- blog_month %>% mutate(month2=ifelse(month>=10, month, paste0("0",month)),
+                                day2 = ifelse(day>=10, day, paste0("0",day))) %>% unite(DT, c(year,month2, day2),sep="") %>% select(DT)
+  date <- date$DT
+  date <- parse_date(date,"%Y%m%d")
+  blog_list[[i]]$date <- date
+  tb <- blog_list[[i]] %>% select(`공기청정기`,`마스크`,date) %>% group_by(date) %>% summarise(num_air_cleaner=sum(`공기청정기`),
+                                                                                       num_mask =sum(`마스크`))
+  return(tb)
+}
+keyword2 <- paste0("keyword_blog",1:12)
+for(i in 1:length(blog_list)){
+  assign(keyword2[i], blog_keyword(i))
+}
+
+keyword_list2 <- list(keyword_blog4,keyword_blog5,keyword_blog6,keyword_blog7,keyword_blog8,keyword_blog9,
+                      keyword_blog10,keyword_blog11,keyword_blog12,keyword_blog1,keyword_blog2,keyword_blog3)
+blog_wordused <- do.call(rbind,keyword_list2)
+dust_blog <- left_join(dust_day_mean ,blog_wordused,by=c("DT"="date"))
+z_blog <- dust_blog[,-1] %>% standardize()
+z_blog$DT <- dust_blog$DT
+write_rds(z_blog, 'complete/z_blog.rds')
+head(z_blog)
+
+g2 <- z_blog %>% gather('m_pm10','m_pm25','num_air_cleaner','num_mask',key="id",value="value") %>% ggplot(aes(DT,value,col=id,group=id))+geom_line()+xlab('DATE')+ylab('Word_used')+
+  ggtitle("Blog Dust with mask and air_cleaner used")+theme(plot.title=element_text(size=20,face='bold'),axis.title.x=element_text(size=10,face='bold'),
+                                                            axis.title.y=element_text(size=10,face='bold'),
+                                                            axis.text.x=element_text(size=10,face='bold'),
+                                                            axis.text.y=element_text(size=10,face='bold'))
+print(g2)
+ggsave(plot = g2 , filename = "Blog Dust with mask and air_cleaner used.pdf", dpi=300)
+```

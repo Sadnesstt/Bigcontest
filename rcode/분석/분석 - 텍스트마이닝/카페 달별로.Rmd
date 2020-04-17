@@ -1,0 +1,204 @@
+# **EDA 카페 텍스트 마이닝1**
+```{r, eval=FALSE}
+library(tidyverse)
+library(rJava)
+library(KoNLP)
+library(tm)
+useNIADic()
+library(reshape2)
+library(slam)
+library(lda)
+library(LDAvis)
+library(topicmodels)
+library(lsa)
+```
+
+#### 사전에 미세먼지 관련 단어 업데이트
+```{r, eval=FALSE}
+mergeUserDic(data.frame(c("피엠십","피엠이점오","초미세먼지","마스크팩","클렌","에어드레서","샘플","고객","차량이부제"),"ncn"))
+```
+
+#### 불러 들이기
+```{r, eval=FALSE}
+cafe <- read_rds('complete/cafe.rds')
+```
+
+#### 중복 제거
+```{r, eval=FALSE}
+cafe <- cafe[-which(duplicated(cafe$CONTENT)),]
+```
+
+#### na 제거
+```{r, eval=FALSE}
+cafe <- cafe[!is.na(cafe$CONTENT),]
+```
+
+#### DT 분리(기간별 키워드 뽑기 위해)
+```{r, eval=FALSE}
+cafe <- cafe %>% separate(DT, c("year","month","day"),sep=c(4,6),convert=T)
+```
+
+#### pm2.5와 pm10을 피엠이점오와 피엠십 치환(영어를 소문자로 치환 후)
+```{r, eval=FALSE}
+cafe$CONTENT <- tolower(cafe$CONTENT)
+cafe$CONTENT <- str_replace_all(cafe$CONTENT,"pm 10","피엠십")
+cafe$CONTENT <- str_replace_all(cafe$CONTENT,"pm 2.5","피엠이점오")
+cafe$CONTENT <- str_replace_all(cafe$CONTENT,"pm10","피엠십")
+cafe$CONTENT <- str_replace_all(cafe$CONTENT,"pm2.5","피엠이점오")
+cafe$CONTENT <- str_replace_all(cafe$CONTENT,"pm 25","피엠이점오")
+cafe$CONTENT <- str_replace_all(cafe$CONTENT,"pm25","피엠이점오")
+```
+
+#### 미세먼지 표현
+```{r, eval=FALSE}
+cafe$CONTENT <- str_replace_all(cafe$CONTENT,"미세먼지","미세먼지 ")
+cafe$CONTENT <- str_replace_all(cafe$CONTENT,"미세 먼지","미세먼지")
+cafe$CONTENT <- str_replace_all(cafe$CONTENT,"미먼","미세먼지")
+cafe$CONTENT <- str_replace_all(cafe$CONTENT,"초 미세먼지","초미세먼지")
+```
+#### 차량2부제
+```{r, eval=FALSE}
+cafe$CONTENT <- str_replace_all(cafe$CONTENT,"차량 2부제","차량이부제 ")
+cafe$CONTENT <- str_replace_all(cafe$CONTENT,"차량2부제","차량이부제")
+cafe$CONTENT <- str_replace_all(cafe$CONTENT,"2부제","이부제")
+cafe$CONTENT <- str_replace_all(cafe$CONTENT,"2 부제","이부제")
+```
+
+#### 마스크팩 표현
+```{r, eval=FALSE}
+cafe$CONTENT <- str_replace_all(cafe$CONTENT,"마스크 팩","마스크팩 ")
+cafe$CONTENT <- str_replace_all(cafe$CONTENT,"팩","마스크팩")
+
+write_rds(cafe, 'complete/cafe_preprocessed.rds')
+```
+
+#### news good or bad day 전처리
+```{r, eval=FALSE}
+forecast <- read.csv('pre/forecast.csv')
+forecast <- forecast %>% group_by(DT) %>% summarise(F10=mean(F10,na.rm=T),F25=mean(F25,na.rm=T))
+goodDT <- forecast %>% filter(F10<2 & F25<2) %>% select(DT)
+goodDT <- as.vector(goodDT$DT)
+goodDT <- as.character(goodDT)
+badDT <- forecast %>% filter(F10>2 & F25>2) %>% select(DT)
+badDT <- as.vector(badDT$DT)
+badDT <- as.character(badDT)
+cafe2 <- cafe %>% mutate(month2=ifelse(month>=10, month, paste0("0",month)),
+                         day2=ifelse(day>=10, day, paste0("0",day))) %>% unite(DT, c(year,month2,day2),sep="")%>%select(DT,CONTENT)
+cafe_good <- cafe2 %>% filter(DT %in% c(goodDT))
+cafe_bad <- cafe2 %>% filter(DT %in% c(badDT))
+
+write_rds(cafe_good, 'complete/cafe_good.rds')
+write_rds(cafe_bad, 'complete/cafe_bad.rds')
+```
+
+
+#### 불용어 제거(txt파일) 출처 : https://www.ranks.nl/stopwords/korean
+```{r, eval=FALSE}
+stopwords <- c(readLines("pre/user_stopwords_cafe0823.txt"))
+
+myvector <- function(i){
+  subset <- cafe %>% filter(month == i) %>% select("CONTENT")
+  subset_clean <- sapply(subset, function(contents) gsub("[^가-힣]"," ",contents))
+  
+  for(j in 1:length(stopwords)){
+    subset_clean <- gsub(stopwords[j],"",subset_clean)
+  }
+  return(subset_clean)
+}
+
+
+subset_clean <- paste0("cafe_clean",1:12)
+for (i in 1:12){
+  assign(subset_clean[i], myvector(i))
+}
+
+```
+
+#### news 코퍼스 및 TDM.tf 구축 
+```{r, eval=FALSE}
+Noun <- function(doc){
+  d <- as.character(doc)
+  d2 <- paste(SimplePos09(d))
+  d3 <- str_match(d2,"([가-힣]+)/N")
+  d4 <- d3[,2]
+  d4[!is.na(d4)]
+}
+
+cafe1.cps <- VCorpus(VectorSource(cafe_clean1))
+cafe1.cps <- tm_map(cafe1.cps, stripWhitespace)
+
+cafe2.cps <- VCorpus(VectorSource(cafe_clean2))
+cafe2.cps <- tm_map(cafe2.cps, stripWhitespace)
+
+cafe3.cps <- VCorpus(VectorSource(cafe_clean3))
+cafe3.cps <- tm_map(cafe3.cps, stripWhitespace)
+
+cafe4.cps <- VCorpus(VectorSource(cafe_clean4))
+cafe4.cps <- tm_map(cafe4.cps, stripWhitespace)
+
+cafe5.cps <- VCorpus(VectorSource(cafe_clean5))
+cafe5.cps <- tm_map(cafe5.cps, stripWhitespace)
+
+cafe6.cps <- VCorpus(VectorSource(cafe_clean6))
+cafe6.cps <- tm_map(cafe6.cps, stripWhitespace)
+
+cafe7.cps <- VCorpus(VectorSource(cafe_clean7))
+cafe7.cps <- tm_map(cafe7.cps, stripWhitespace)
+
+cafe8.cps <- VCorpus(VectorSource(cafe_clean8))
+cafe8.cps <- tm_map(cafe8.cps, stripWhitespace)
+
+cafe9.cps <- VCorpus(VectorSource(cafe_clean9))
+cafe9.cps <- tm_map(cafe9.cps, stripWhitespace)
+
+cafe10.cps <- VCorpus(VectorSource(cafe_clean10))
+cafe10.cps <- tm_map(cafe10.cps, stripWhitespace)
+
+cafe11.cps <- VCorpus(VectorSource(cafe_clean11))
+cafe11.cps <- tm_map(cafe11.cps, stripWhitespace)
+
+cafe12.cps <- VCorpus(VectorSource(cafe_clean12))
+cafe12.cps <- tm_map(cafe12.cps, stripWhitespace)
+
+```
+
+#### 월별 TDM 구축
+```{r, eval=FALSE}
+cafe1.TDM.tf <- TermDocumentMatrix(cafe1.cps, control=list(tokenize=Noun,wordLengths=c(2,5)))
+write_rds(cafe1.TDM.tf, 'complete/cafe1.TDM.tf.rds')
+
+cafe2.TDM.tf <- TermDocumentMatrix(cafe2.cps, control=list(tokenize=Noun,wordLengths=c(2,5)))
+write_rds(cafe2.TDM.tf, 'complete/cafe2.TDM.tf.rds')
+
+cafe3.TDM.tf <- TermDocumentMatrix(cafe3.cps, control=list(tokenize=Noun,wordLengths=c(2,5)))
+write_rds(cafe3.TDM.tf, 'complete/cafe3.TDM.tf.rds')
+
+cafe4.TDM.tf <- TermDocumentMatrix(cafe4.cps, control=list(tokenize=Noun,wordLengths=c(2,5)))
+write_rds(cafe4.TDM.tf, 'complete/cafe4.TDM.tf.rds')
+
+cafe5.TDM.tf <- TermDocumentMatrix(cafe5.cps, control=list(tokenize=Noun,wordLengths=c(2,5)))
+write_rds(cafe5.TDM.tf, 'complete/cafe5.TDM.tf.rds')
+
+cafe6.TDM.tf <- TermDocumentMatrix(cafe6.cps, control=list(tokenize=Noun,wordLengths=c(2,5)))
+write_rds(cafe6.TDM.tf, 'complete/cafe6.TDM.tf.rds')
+
+cafe7.TDM.tf <- TermDocumentMatrix(cafe7.cps, control=list(tokenize=Noun,wordLengths=c(2,5)))
+write_rds(cafe7.TDM.tf, 'complete/cafe7.TDM.tf.rds')
+
+cafe8.TDM.tf <- TermDocumentMatrix(cafe8.cps, control=list(tokenize=Noun,wordLengths=c(2,5)))
+write_rds(cafe8.TDM.tf, 'complete/cafe8.TDM.tf.rds')
+
+cafe9.TDM.tf <- TermDocumentMatrix(cafe9.cps, control=list(tokenize=Noun,wordLengths=c(2,5)))
+write_rds(cafe9.TDM.tf, 'complete/cafe9.TDM.tf.rds')
+
+cafe10.TDM.tf <- TermDocumentMatrix(cafe10.cps, control=list(tokenize=Noun,wordLengths=c(2,5)))
+write_rds(cafe10.TDM.tf, 'complete/cafe10.TDM.tf.rds')
+
+cafe11.TDM.tf <- TermDocumentMatrix(cafe11.cps, control=list(tokenize=Noun,wordLengths=c(2,5)))
+write_rds(cafe11.TDM.tf, 'complete/cafe11.TDM.tf.rds')
+
+cafe12.TDM.tf <- TermDocumentMatrix(cafe12.cps, control=list(tokenize=Noun,wordLengths=c(2,5)))
+write_rds(cafe12.TDM.tf, 'complete/cafe12.TDM.tf.rds')
+
+
+```

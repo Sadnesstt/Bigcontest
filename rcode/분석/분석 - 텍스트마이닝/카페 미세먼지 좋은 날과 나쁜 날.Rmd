@@ -1,0 +1,128 @@
+# **EDA 카페 텍스트 마이닝2**
+# **cafe_good/bad 텍스트마이닝**
+
+# 불용어 제거(txt파일) 출처 : https://www.ranks.nl/stopwords/korean
+```{r, eval=FALSE}
+cgood <- cafe_good %>% select("CONTENT")
+cgood_clean <- sapply(cgood, function(contents) gsub("[^가-힣]"," ",contents))
+
+for(j in 1:length(stopwords)){
+  cgood_clean <- gsub(stopwords[j],"",cgood_clean)
+}
+
+cbad <- cafe_bad %>% select("CONTENT")
+cbad_clean <- sapply(cbad, function(contents) gsub("[^가-힣]"," ",contents))
+
+for(j in 1:length(stopwords)){
+  cbad_clean <- gsub(stopwords[j],"",cbad_clean)
+}
+```
+#### 미세먼지 좋은날/ 나쁜날 TDM 구축
+```{r, eval=FALSE}
+cgood.cps <- VCorpus(VectorSource(cgood_clean))
+cgood.cps <- tm_map(cgood.cps, stripWhitespace)
+
+cbad.cps <- VCorpus(VectorSource(cbad_clean))
+cbad.cps <- tm_map(cbad.cps, stripWhitespace)
+
+
+cgood.TDM.tf <- TermDocumentMatrix(cgood.cps, control=list(tokenize=Noun,wordLengths=c(2,5)))
+cgood.TDM.tf2 <- removeSparseTerms(cgood.TDM.tf,sparse=0.99)
+write_rds(cgood.TDM.tf, 'complete/cgood.TDM.tf.rds')
+
+cbad.TDM.tf <- TermDocumentMatrix(cbad.cps, control=list(tokenize=Noun,wordLengths=c(2,5)))
+cbad.TDM.tf2 <- removeSparseTerms(cbad.TDM.tf,sparse=0.99)
+write_rds(cbad.TDM.tf, 'complete/cbad.TDM.tf.rds')
+```
+
+#### **cafe_good/bad 토픽모델**
+#### dtm으로 만들기(나중에 전처리)
+```{r, eval=FALSE}
+cgood.dtm <- as.DocumentTermMatrix(cgood.TDM.tf2)
+cbad.dtm <- as.DocumentTermMatrix(cbad.TDM.tf2)
+```
+
+#### lda 폼으로 만들고 MCMC 깁스 샘플링 돌리기
+```{r, eval=FALSE}
+cgood.ldaform <- dtm2ldaformat(cgood.dtm, omit_empty=F)
+cgood.result.lda <- lda.collapsed.gibbs.sampler(cgood.ldaform$documents,
+                                                K = 8,
+                                                vocab = cgood.ldaform$vocab,
+                                                num.iterations = 1000,
+                                                burnin = 1000,
+                                                alpha = 0.01,
+                                                eta = 0.01)
+write_rds(cgood.result.lda,'complete/cgood.result.lda.rds')
+
+cbad.ldaform <- dtm2ldaformat(cbad.dtm, omit_empty=F)
+cbad.result.lda <- lda.collapsed.gibbs.sampler(cbad.ldaform$documents,
+                                               K = 8,
+                                               vocab = cbad.ldaform$vocab,
+                                               num.iterations = 1000,
+                                               burnin = 1000,
+                                               alpha = 0.01,
+                                               eta = 0.01)
+write_rds(cbad.result.lda,'complete/cbad.result.lda.rds')
+```
+
+## **cafe topic words and freq**
+#### cafe토픽 top words 뽑기
+```{r, eval=FALSE}
+cafegood.topic.words <- top.topic.words(cgood.result.lda$topics, 10, by.score=T)
+cafebad.topic.words <- top.topic.words(cbad.result.lda$topics, 10, by.score=T)
+```
+
+#### 분석을 위해 idf 계산하기
+#### 빈출 단어만 간추리기
+```{r, eval=FALSE}
+word.count1 = as.array(rollup(cgood.TDM.tf2,2))   #매트릭스 행별 합계구하기
+word.order1 = order(word.count1, decreasing = T)[1:500] #많이 쓰인 단어 순서정리(단어번호)
+freq.word1 = word.order1[1:500]  #상위 500개 단어만 재할당(단어번호)
+cgood1.mat = as.matrix(cgood.TDM.tf2[freq.word1,]) #매트릭스로 변환
+cgood1.w = lw_bintf(cgood1.mat)*gw_idf(cgood1.mat)  # 가중치 계산 tf값 = bintf(사용되었음 1, 아님0으로 가중치)
+
+word.count2 = as.array(rollup(cbad.TDM.tf2,2))   #매트릭스 행별 합계구하기
+word.order2 = order(word.count2, decreasing = T)[1:350] #많이 쓰인 단어 순서정리(단어번호)
+freq.word2 = word.order2[1:350]  #상위 350개 단어만 재할당(단어번호)
+cbad.mat = as.matrix(cbad.TDM.tf2[freq.word2,]) #매트릭스로 변환
+cbad.w = lw_bintf(cbad.mat)*gw_idf(cbad.mat)  # 가중치 계산 tf값 = bintf(사용되었음 1, 아님0으로 가중치)
+
+wordcount <- rowSums(cgood1.w) # 각 단어별 합계를 구함
+wordorder <- order(wordcount, decreasing=T)
+freqwords <- cgood1.w[wordorder[1:50],] # TDM에서 자주 쓰인 단어 상위 50개에 해당하는 것만 추출
+
+wordcount2 <- rowSums(cbad.w) # 각 단어별 합계를 구함
+wordorder2 <- order(wordcount2, decreasing=T)
+freqwords2 <- cbad.w[wordorder2[1:50],] # TDM에서 자주 쓰인 단어 상위 50개에 해당하는 것만 추출
+```
+
+#### 키워드 분석(bar 차트 및 파이차트로 비중 나타내기 또는 워드클라우드)
+```{r, eval=FALSE}
+freq <- rowSums(freqwords)
+freqwords22 <- cbind(freqwords,freq)
+freqwords33 <- as.data.frame(freqwords22[,dim(freqwords22)[2]])
+keywords <- rownames(freqwords33)
+freqwords44 <- data.frame("keyword"=keywords,"freq"=freq)
+rownames(freqwords44) <- 1:50
+p <- ggplot(freqwords44,aes(reorder(keyword,freqwords44$freq),freq))+geom_bar(stat="identity")+xlab("키워드")+
+  ylab("빈도(TF-IDF)")+coord_flip()+theme(axis.title.x=element_text(size=10,face='bold'),
+                                        axis.title.y=element_text(size=10,face='bold'),
+                                        axis.text.x=element_text(size=10,face='bold'),
+                                        axis.text.y=element_text(size=10,face='bold'))
+ggsave(plot=p , filename='freqword_cafe_good.png',dpi=300)
+
+freq2 <- rowSums(freqwords2)
+freqwords222 <- cbind(freqwords2,freq2)
+freqwords333 <- as.data.frame(freqwords222[,dim(freqwords222)[2]])
+keywords2 <- rownames(freqwords333)
+freqwords444 <- data.frame("keyword"=keywords2,"freq"=freq2)
+rownames(freqwords444) <- 1:50
+p <- ggplot(freqwords444,aes(reorder(keyword,freqwords444$freq),freq))+geom_bar(stat="identity")+xlab("키워드")+
+  ylab("빈도(TF-IDF)")+coord_flip()+theme(axis.title.x=element_text(size=10,face='bold'),
+                                        axis.title.y=element_text(size=10,face='bold'),
+                                        axis.text.x=element_text(size=10,face='bold'),
+                                        axis.text.y=element_text(size=10,face='bold'))
+ggsave(plot=p , filename='freqword_cafe_bad.png',dpi=300)
+
+```
+

@@ -1,0 +1,435 @@
+---
+title: "preprocessing1"
+output: html_document
+---
+
+# **전처리1**
+```{r}
+library(tidyverse)
+library(readxl)
+library(data.table)
+```
+
+# 변수명 변경
+## card
+```{r}
+card <- fread('pre/CARD_SPENDING_190809.txt')
+card <- as_tibble(card)
+head(card)
+names(card)[1] <- "DT"
+card <- card %>% unite(HDONG_CD, c(GU_CD,DONG_CD),sep="")
+head(card)
+write_rds(card, 'complete/card.rds')
+```
+
+## flow.time
+```{r}
+mydata_flow.time <- list.files('pre/시간대유동')
+list_flow.time <- list()
+for (i in 1:length(mydata_flow.time)){
+  list_flow.time[[i]] <- read_delim(paste0('pre/시간대유동/',mydata_flow.time[i]),delim='|')
+}
+flow.time <- do.call(rbind, list_flow.time)
+flow.time <- flow.time[,-1]
+names(flow.time)[1] <- "DT"
+flow.time <- flow.time %>% separate(HDONG_CD, c("a","HDONG_CD","b"),sep=c(2,8)) %>% select(-a,-b) %>%
+  gather('TMST_00':'TMST_23',key="TIME",value="VALUE") %>% separate(TIME, c("a","TIME"),sep="_",convert=T) %>% select(-a)
+write_rds(flow.time, 'complete/flow.time.rds')
+head(flow.time)
+```
+
+## flow.sexage
+```{r}
+mydata_flow.sexage <- list.files('pre/성연령유동')
+list_flow.sexage <- list()
+for (i in 1:length(mydata_flow.sexage)){
+  list_flow.sexage[[i]] <- read_delim(paste0('pre/성연령유동/',mydata_flow.sexage[i]),delim='|')
+}
+flow.sexage <- do.call(rbind, list_flow.sexage)
+flow.sexage <- flow.sexage[,-1]
+names(flow.sexage)[1] <- "DT"
+flow.sexage1 <- flow.sexage %>% separate(HDONG_CD, c("a","HDONG_CD","b"), sep=c(2,8)) %>% select(-a,-b) %>%
+  gather('MAN_FLOW_POP_CNT_0004':'WMAN_FLOW_POP_CNT_70U',key=sexage,value=value) %>%
+  separate(sexage, c("sex","flow","pop","cnt","age"),sep="_") %>% select(-flow,-pop,-cnt) %>%
+  mutate(sex=ifelse(sex=="MAN","M","F")) %>% mutate(age=str_replace(age,"70U","7085")) %>%
+  separate(age, c("L.age","U.age"),sep=2,convert=T) %>% mutate(age=(L.age+U.age)/2) %>% select(-L.age,-U.age)  
+flow.sexage1 <- flow.sexage1[,-3]
+flow.sexage1 <- flow.sexage1 %>% select(DT,HDONG_CD, sex, age, value)
+names(flow.sexage1)[c(3,4,5)] <- c("SEX","AGE","VALUE")
+flow.sexage1[flow.sexage1$AGE<20,4] = 15
+flow.sexage1[flow.sexage1$AGE==22,4] = 20
+flow.sexage1[flow.sexage1$AGE==27,4] = 25
+flow.sexage1[flow.sexage1$AGE==32,4] = 30
+flow.sexage1[flow.sexage1$AGE==37,4] = 35
+flow.sexage1[flow.sexage1$AGE==42,4] = 40
+flow.sexage1[flow.sexage1$AGE==47,4] = 45
+flow.sexage1[flow.sexage1$AGE==52,4] = 50
+flow.sexage1[flow.sexage1$AGE==57,4] = 55
+
+flow.sexage1[flow.sexage1$AGE==62,4] = 60
+flow.sexage1[flow.sexage1$AGE>=67,4] = 65
+
+flow.sexage <- flow.sexage1 %>% group_by(DT, HDONG_CD,SEX,AGE) %>% summarise(VALUE=sum(VALUE))
+write_rds(flow.sexage,'complete/flow.sexage.rds')
+head(flow.sexage)
+```
+
+## gs
+```{r}
+gs <- read_xlsx('pre/GS리테일_동별 매출지수용 기준값 확인_AMT_NEW.xlsx',sheet=6)
+gs <- gs[,-2]
+names(gs)[c(1,2)] <- c("DT","HDONG_CD")
+gs <- gs %>% separate(HDONG_CD, c("a","HDONG_CD","b"),sep=c(2,8)) %>% select(-a,-b)
+write_rds(gs, 'complete/gs.rds')
+head(gs)
+```
+
+## dust
+```{r, eval=FALSE}
+mydata_dust.jong <- list.files('pre/종로구')
+list_dust.jong <- list() 
+for (i in 1:length(mydata_dust.jong)){
+  list_dust.jong[[i]] <- read_csv(paste0('pre/종로구/',mydata_dust.jong[i]),
+                                  col_types=cols(
+                                    flag = col_double(),
+                                    pm10 = col_double(),
+                                    co2 = col_double(),
+                                    vocs = col_double(),
+                                    noise = col_double(),
+                                    humi = col_double(),
+                                    pm25 = col_double()
+                                  ))
+}
+jong <- do.call(rbind, list_dust.jong)
+
+mydata_dust.no <- list.files('pre/노원구')
+list_dust.no <- list() 
+for (i in 1:length(mydata_dust.no)){
+  list_dust.no[[i]] <- read_csv(paste0('pre/노원구/',mydata_dust.no[i]),
+                                  col_types=cols(
+                                    flag = col_double(),
+                                    pm10 = col_double(),
+                                    co2 = col_double(),
+                                    vocs = col_double(),
+                                    noise = col_double(),
+                                    humi = col_double(),
+                                    pm25 = col_double()
+                                  ))
+}
+no <- do.call(rbind, list_dust.no)
+
+jong <- jong[,-11]; no <- no[,-11]
+jong <- jong %>% separate(tm,c("DT","TIME"),-4,convert=T)
+no <- no %>% separate(tm,c("DT","TIME"),-4,convert=T)
+```
+
+### 종로구 도렴동 스테이션 모두 na이므로 제거
+```{r, eval=FALSE}
+jong <- jong %>% filter(!serial=="V01o1610468")
+```
+
+### flag가 1인 row만 남김 : flag가 -999일 때 모두 na이기 때문이다.
+```{r, eval=FALSE}
+jong = jong[jong$flag!=-999,]; no = no[no$flag!=-999,]
+```
+
+### co2,vocs 값은 모두 na이기때문에 제거
+```{r, eval=FALSE}
+jong = jong %>% select(-co2, -vocs); no = no %>% select(-co2, -vocs)
+```
+
+### -999와 -9999 모두 NA 처리함
+```{r, eval=FALSE}
+jong[jong$pm10 %in% c(-9999,-999),5] = NA
+jong[jong$noise %in% c(-9999,-999),6] = NA
+jong[jong$temp %in% c(-9999,-999),7] = NA
+jong[jong$humi %in% c(-9999,-999),8] = NA
+jong[jong$pm25 %in% c(-9999,-999),9] = NA
+
+no[no$pm10 %in% c(-9999,-999),5] = NA
+no[no$noise %in% c(-9999,-999),6] = NA
+no[no$temp %in% c(-9999,-999),7] = NA
+no[no$humi %in% c(-9999,-999),8] = NA
+no[no$pm25 %in% c(-9999,-999),9] = NA
+```
+
+### 이상치 제거를 위해 difference 계산
+#### 원드라이브 difference 폴더(365*24*60 시간 데이터 형성)
+```{r, eval=FALSE}
+dt = read_rds("pre/full.DT.TIME.rds")
+full.DT.TIME = dt
+```
+
+#### 종로구
+```{r, eval=FALSE}
+jong.serial = names(table(jong$serial))
+
+aa = jong[1,1:9]
+aa $ pm10_diff = 0
+aa $ pm25_diff = 0
+aa
+
+ab = aa
+ab
+
+aa = ab
+for(i in 1:5){
+  seri = jong.serial[i]
+  jong.seri = jong%>%filter(serial == seri)
+  allseri = left_join(full.DT.TIME, jong.seri, by = c("DT", "TIME"))
+  
+  pm10_p = allseri$pm10
+  pm10_m = c(0, allseri$pm10[1:525599])
+  
+  pm25_p = allseri$pm25
+  pm25_m = c(0, allseri$pm25[1:525599])
+  
+  allseri$pm10_diff = pm10_p - pm10_m
+  allseri$pm25_diff = pm25_p - pm25_m   
+  
+  aa = rbind(aa, allseri)
+}   
+
+aa1 = aa
+
+aa = ab
+
+for(i in 6:10){
+  seri = jong.serial[i]
+  jong.seri = jong%>%filter(serial == seri)
+  allseri = left_join(full.DT.TIME, jong.seri, by = c("DT", "TIME"))
+  
+  pm10_p = allseri$pm10
+  pm10_m = c(0, allseri$pm10[1:525599])
+  
+  pm25_p = allseri$pm25
+  pm25_m = c(0, allseri$pm25[1:525599])
+  
+  allseri$pm10_diff = pm10_p - pm10_m
+  allseri$pm25_diff = pm25_p - pm25_m   
+  
+  aa = rbind(aa, allseri)
+}   
+
+aa2 = aa
+
+aa = ab
+
+for(i in 11:15){
+  seri = jong.serial[i]
+  jong.seri = jong%>%filter(serial == seri)
+  allseri = left_join(full.DT.TIME, jong.seri, by = c("DT", "TIME"))
+  
+  pm10_p = allseri$pm10
+  pm10_m = c(0, allseri$pm10[1:525599])
+  
+  pm25_p = allseri$pm25
+  pm25_m = c(0, allseri$pm25[1:525599])
+  
+  allseri$pm10_diff = pm10_p - pm10_m
+  allseri$pm25_diff = pm25_p - pm25_m   
+  
+  aa = rbind(aa, allseri)
+}   
+
+aa3 = aa
+
+aa = ab
+
+for(i in 16:20){
+  seri = jong.serial[i]
+  jong.seri = jong%>%filter(serial == seri)
+  allseri = left_join(full.DT.TIME, jong.seri, by = c("DT", "TIME"))
+  
+  pm10_p = allseri$pm10
+  pm10_m = c(0, allseri$pm10[1:525599])
+  
+  pm25_p = allseri$pm25
+  pm25_m = c(0, allseri$pm25[1:525599])
+  
+  allseri$pm10_diff = pm10_p - pm10_m
+  allseri$pm25_diff = pm25_p - pm25_m   
+  
+  aa = rbind(aa, allseri)
+}   
+
+aa4 = aa
+
+aa = ab
+
+for(i in 21:25){
+  seri = jong.serial[i]
+  jong.seri = jong%>%filter(serial == seri)
+  allseri = left_join(full.DT.TIME, jong.seri, by = c("DT", "TIME"))
+  
+  pm10_p = allseri$pm10
+  pm10_m = c(0, allseri$pm10[1:525599])
+  
+  pm25_p = allseri$pm25
+  pm25_m = c(0, allseri$pm25[1:525599])
+  
+  allseri$pm10_diff = pm10_p - pm10_m
+  allseri$pm25_diff = pm25_p - pm25_m   
+  
+  aa = rbind(aa, allseri)
+}   
+
+aa5 = aa
+
+aa = ab
+
+for(i in 26:30){
+  seri = jong.serial[i]
+  jong.seri = jong%>%filter(serial == seri)
+  allseri = left_join(full.DT.TIME, jong.seri, by = c("DT", "TIME"))
+  
+  pm10_p = allseri$pm10
+  pm10_m = c(0, allseri$pm10[1:525599])
+  
+  pm25_p = allseri$pm25
+  pm25_m = c(0, allseri$pm25[1:525599])
+  
+  allseri$pm10_diff = pm10_p - pm10_m
+  allseri$pm25_diff = pm25_p - pm25_m   
+  
+  aa = rbind(aa, allseri)
+}   
+
+aa6 = aa
+
+
+aa1 = aa1[-1,]
+aa2 = aa2[-1,]
+aa3 = aa3[-1,]
+aa4 = aa4[-1,]
+aa5 = aa5[-1,]
+aa6 = aa6[-1,]
+
+write_rds(aa1, "diff/dust.jong.diff1.rds")
+write_rds(aa2, "diff/dust.jong.diff2.rds")
+write_rds(aa3, "diff/dust.jong.diff3.rds")
+write_rds(aa4, "diff/dust.jong.diff4.rds")
+write_rds(aa5, "diff/dust.jong.diff5.rds")
+write_rds(aa6, "diff/dust.jong.diff6.rds")
+```
+
+#### 노원구
+```{r, eval=FALSE}
+jong = no
+
+
+jong.serial = names(table(jong$serial))
+length(jong.serial)
+
+aa = jong[1,1:9]
+aa $ pm10_diff = 0
+aa $ pm25_diff = 0
+aa
+
+ab = aa
+ab
+
+aa = ab
+for(i in 1:6){
+  seri = jong.serial[i]
+  jong.seri = jong%>%filter(serial == seri)
+  allseri = left_join(full.DT.TIME, jong.seri, by = c("DT", "TIME"))
+  
+  pm10_p = allseri$pm10
+  pm10_m = c(0, allseri$pm10[1:525599])
+  
+  pm25_p = allseri$pm25
+  pm25_m = c(0, allseri$pm25[1:525599])
+  
+  allseri$pm10_diff = pm10_p - pm10_m
+  allseri$pm25_diff = pm25_p - pm25_m   
+  
+  aa = rbind(aa, allseri)
+}   
+
+aa1 = aa
+
+aa = ab
+
+for(i in 7:12){
+  seri = jong.serial[i]
+  jong.seri = jong%>%filter(serial == seri)
+  allseri = left_join(full.DT.TIME, jong.seri, by = c("DT", "TIME"))
+  
+  pm10_p = allseri$pm10
+  pm10_m = c(0, allseri$pm10[1:525599])
+  
+  pm25_p = allseri$pm25
+  pm25_m = c(0, allseri$pm25[1:525599])
+  
+  allseri$pm10_diff = pm10_p - pm10_m
+  allseri$pm25_diff = pm25_p - pm25_m   
+  
+  aa = rbind(aa, allseri)
+}   
+
+aa2 = aa
+
+aa = ab
+
+for(i in 13:18){
+  seri = jong.serial[i]
+  jong.seri = jong%>%filter(serial == seri)
+  allseri = left_join(full.DT.TIME, jong.seri, by = c("DT", "TIME"))
+  
+  pm10_p = allseri$pm10
+  pm10_m = c(0, allseri$pm10[1:525599])
+  
+  pm25_p = allseri$pm25
+  pm25_m = c(0, allseri$pm25[1:525599])
+  
+  allseri$pm10_diff = pm10_p - pm10_m
+  allseri$pm25_diff = pm25_p - pm25_m   
+  
+  aa = rbind(aa, allseri)
+}   
+
+aa3 = aa
+
+aa = ab
+
+for(i in 19:22){
+  seri = jong.serial[i]
+  jong.seri = jong%>%filter(serial == seri)
+  allseri = left_join(full.DT.TIME, jong.seri, by = c("DT", "TIME"))
+  
+  pm10_p = allseri$pm10
+  pm10_m = c(0, allseri$pm10[1:525599])
+  
+  pm25_p = allseri$pm25
+  pm25_m = c(0, allseri$pm25[1:525599])
+  
+  allseri$pm10_diff = pm10_p - pm10_m
+  allseri$pm25_diff = pm25_p - pm25_m   
+  
+  aa = rbind(aa, allseri)
+}   
+
+aa4 = aa
+
+aa = ab
+
+
+
+aa1 = aa1[-1,]
+aa2 = aa2[-1,]
+aa3 = aa3[-1,]
+aa4 = aa4[-1,]
+
+write_rds(aa1, "diff/dust.nowon.diff1.rds")
+write_rds(aa2, "diff/dust.nowon.diff2.rds")
+write_rds(aa3, "diff/dust.nowon.diff3.rds")
+write_rds(aa4, "diff/dust.nowon.diff4.rds")
+
+
+myfiles_diff <- list.files(path="diff", pattern="rds", full.names=T)
+mylist_diff <- lapply(myfiles_diff, read_rds)
+mydata <- do.call(rbind, mylist_diff)
+write_rds(mydata,'complete/diff.rds')
+```
+

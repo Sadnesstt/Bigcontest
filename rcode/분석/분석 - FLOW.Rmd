@@ -1,0 +1,112 @@
+---
+title: "FLOW"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+setwd('C:/Users/user/Documents')
+setwd("./complete")
+```
+
+# FLOW 데이터 분석
+# Flow.time 유동인구 데이터 – 시간별 유동인구와 미세먼지
+
+##### 필요한 라이브러리 로드
+```{r}
+library(tidyverse)
+```
+
+##### 필요한 데이터 로드
+```{r}
+flow.time.kgb = as_tibble(read.csv("flowtime동별gb_kweather.csv"))
+flow.sexage.kgb = as_tibble(read.csv("flow.sexage동별gb_kweather.csv"))
+```
+
+***
+***
+
+##### 종로구의 17개 동과, 노원구의 19개 동을 살펴보았다. 미세먼지가 나쁜날 유동인구의 평균을 좋은 날의 유동인구 평균으로 나누었다. 즉 미세먼지가 나쁜날 평균 유동인구와, 미세먼지가 좋은날 평균 유동인구의 비(ratio)를 구했다.
+##### ratio가 1보다 넘으면 미세먼지가 나쁜날 유동인구가 미세먼지가 좋은 때보다 더 많다는 것이다. 반면 ratio 값이 1이 아니면, 유동인구는 미세먼지가 나쁠때보다 좋을 때 더 많다.
+##### 노원구는 미세먼지가 나쁜 날 유동인구가 적은 반면, 종로구는 유동인구가 더 많아지는 특정 시간대가 존재했다. 특히 주말의 새벽 2시와 주말의 점심에 미세먼지가 나쁨에도 유동인구가 더 많았다. 
+
+```{r}
+
+colnames(flow.time.kgb)[4:27] = 0:23
+flow.time.kgb2 = flow.time.kgb %>% gather( c(paste0(0:23)) , key = 'TIME', value = "FLOW" )
+flow.time.kgb2$TIME = factor(flow.time.kgb2$TIME, levels = 0:23)
+flow.time.kgb2
+flow.time.kgb3 = flow.time.kgb2 %>% separate(HDONG, c("GU", "HHDONG"), c(1))
+
+ja = round(table(flow.time.kgb3  %>% filter(gb == 'ratio', weekend == '주중', GU == 'J', FLOW >= 1) %>% select(TIME))/17 , 3)
+jb = round(table(flow.time.kgb3  %>% filter(gb == 'ratio', weekend == '주말', GU == 'J', FLOW >= 1) %>% select(TIME))/17 , 3)
+
+jaa =  table(flow.time.kgb3  %>% filter(gb == 'ratio', weekend == '주중', GU == 'J', FLOW >= 1) %>% select(TIME))
+jbb = table(flow.time.kgb3  %>% filter(gb == 'ratio', weekend == '주말', GU == 'J', FLOW >= 1) %>% select(TIME))
+
+
+na = round(table(flow.time.kgb3  %>% filter(gb == 'ratio', weekend == '주중', GU == 'N', FLOW >= 1) %>% select(TIME))/19 , 3)
+nb = round(table(flow.time.kgb3  %>% filter(gb == 'ratio', weekend == '주말', GU == 'N', FLOW >= 1) %>% select(TIME))/19 , 3)
+
+naa =  table(flow.time.kgb3  %>% filter(gb == 'ratio', weekend == '주중', GU == 'N', FLOW >= 1) %>% select(TIME))
+nbb =  table(flow.time.kgb3  %>% filter(gb == 'ratio', weekend == '주말', GU == 'N', FLOW >= 1) %>% select(TIME))
+
+jab = rbind(jaa,ja,jbb,jb)
+rownames(jab) = c('종로구 주중 count', '종로구 주중 percent', '종로구 주말 count', '종로구 주말 percent')
+jab
+
+write.csv(jab, '종로구 flowtime table.csv')
+
+nab = rbind(naa,na,nbb,nb)
+nab
+rownames(nab) = c('노원구 주중 count', '노원구 주중 percent', '노원구 주말 count', '노원구 주말 percent')
+
+write.csv(nab, '노원구 flowtime table.csv')
+```
+
+***
+***
+
+##### 주말 미세먼지가 나쁘면 사람들이 잘 돌아다니지 않을 것이라 생각했으나, 종로구 몇 지역에서 미세먼지가 나쁠때가 좋을 때보다 유동인구가 늘어난 이유는 무엇일까?
+##### 종로구는 직장지&관광지가 많다는 특징이 있다. 
+##### 특히 삼청동이 다른 구에 비해, 주말의 미세먼지가 나쁜 날 유동인구가 늘어난다. 삼청동은 관광지다. 사람들은 미세먼지에 개의치 않고 돌아다니는 듯 하다. 아래 그래프는 주말에, 미세먼지가 나쁜날, 좋은날 ratio를 동별로 시간별로 본 그래프이다.
+
+
+```{r}
+
+colnames(flow.time.kgb)[4:27] = 0:23
+flow.time.kgb
+
+flow.time.kgb2 = flow.time.kgb %>% gather( c(paste0(0:23)) , key = 'TIME', value = "FLOW" )
+
+flow.time.kgb2$TIME = factor(flow.time.kgb2$TIME, levels = 0:23)
+
+flow.time.kgb2
+flow.time.kgb2 %>% filter(gb == 'ratio', weekend == '주말') %>%
+  ggplot(aes(HDONG, FLOW, fill = TIME)) + 
+  geom_bar(stat = 'identity', position=position_dodge()) + 
+  geom_hline(yintercept=1) +   
+  theme(axis.text.x = element_text(angle = 270, hjust = 0))
+
+```
+
+***
+***
+
+# Flow.time 유동인구 데이터
+# – 미세먼지가 좋은날, 나쁜날 평균 유동인구의 비교. 동별, 주중주말별.
+
+##### 미세먼지가 나쁜날 유동인구 평균 / 미세먼지가 좋은날 유동인구 평균 ratio를, 동별로 주중 주말별로 살펴보았다.
+##### 주말과 주중에 그렇게 큰 차이는 없다. 또한 대부분 동의 ratio가 푸른 선인 0.9를 넘는다. 따라서 미세먼지가 나쁘다고 해서 유동인구가 상대적으로 크게 줄어들진 않는다.
+
+```{r}
+flow.sexage.kgb  %>% filter(gb == "ratio") %>% ggplot(aes(HDONG, ALL)) + 
+  geom_bar(stat = 'identity', aes(fill = weekend), position=position_dodge()) + 
+  geom_hline(yintercept=1) +geom_hline(yintercept=0.9, color = 'blue') +
+  ggtitle("flow.sexage.kgb.주중과주말단순비교") +
+   theme(axis.text.x = element_text(angle = 270, hjust = 0))
+
+```

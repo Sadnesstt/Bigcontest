@@ -1,0 +1,203 @@
+---
+title: "preprocessing2"
+output:
+  html_document: default
+  word_document: default
+---
+# **전처리2**
+#### pm10과 pm2.5의 박스플랏과 cutoff 포인트 0.005% 제거
+```{r}
+library(tidyverse)
+mydata <- read_rds('complete/diff.rds')
+quantile(abs(mydata$pm10_diff), 0.99995, na.rm=T)
+quantile(abs(mydata$pm25_diff), 0.99995, na.rm=T)
+```
+
+#### outlier를 NA로 처리
+```{r, eval=FALSE}
+mydata[!is.na(mydata$pm10_diff) & mydata$pm10_diff>299,5] = NA
+mydata[!is.na(mydata$pm25_diff) & mydata$pm25_diff>183,9] = NA
+```
+
+#### pm10_diff와 pm25_diff, flag 칼럼 삭제
+```{r, eval=FALSE}
+mydata <- mydata[,-c(10,11)]
+mydata <- mydata[,-4]
+```
+
+#### 스테이션별 평균
+#### 종로구
+```{r, eval=FALSE}
+H110515 = mydata %>% filter(serial == "V10O1611255") %>% rename(HDONG_CD = serial) %>% mutate(HDONG_CD = 110515) 
+write_rds(H110515, "hdong/H110515.rds")
+
+H110530 = mydata %>% filter(serial == "V10O1611172") %>% rename(HDONG_CD = serial) %>% mutate(HDONG_CD = 110530) 
+write_rds(H110530, "hdong/H110530.rds")
+
+H110540 = mydata %>% filter(serial == "V10O1611255" | serial == "V10O1611634" | serial == "V10O1611722" | serial == "V10O1611698") %>%
+  group_by(DT, TIME) %>% summarise( pm10 = mean(pm10, na.rm = T), pm25 = mean(pm25, na.rm = T), 
+                                    noise = mean(noise, na.rm = T), temp = mean(temp, na.rm = T), humi = mean(humi, na.rm = T)) %>%
+  mutate(HDONG_CD = 110540) %>% select(DT, TIME, HDONG_CD, everything())
+
+write_rds(H110540, "hdong/H110540.rds")
+
+
+H110550 = mydata %>% filter(serial == "V10O1611170" )%>% rename(HDONG_CD = serial) %>% mutate(HDONG_CD = 110550) 
+write_rds(H110550, "hdong/H110550.rds")
+
+H110560 = mydata %>% filter(serial == "V10O1611170") %>% rename(HDONG_CD = serial) %>% mutate(HDONG_CD = 110560)
+write_rds(H110560, "hdong/H110560.rds")
+
+H110570 = mydata %>% filter(serial == "V10O1611289" | serial =="V10O1610252"|serial == "V10O1611172") %>% 
+  group_by(DT, TIME) %>% summarise( pm10 = mean(pm10, na.rm = T), pm25 = mean(pm25, na.rm = T), 
+                                    noise = mean(noise, na.rm = T), temp = mean(temp, na.rm = T), humi = mean(humi, na.rm = T)) %>%
+  mutate(HDONG_CD = 110570) %>% select(DT, TIME, HDONG_CD, everything())
+write_rds(H110570, "hdong/H110570.rds")
+
+mydata %>% filter(serial == "V10O1610252"|serial == "V10O1611289") %>% 
+  group_by(DT, TIME) %>% summarise( pm10 = mean(pm10, na.rm = T), pm25 = mean(pm25, na.rm = T), 
+                                    noise = mean(noise, na.rm = T), temp = mean(temp, na.rm = T), humi = mean(humi, na.rm = T)) %>%
+  mutate(HDONG_CD = 110580) %>% select(DT, TIME, HDONG_CD, everything())%>% write_rds("hdong/H110580.rds")
+
+mydata %>% filter(serial == "V10O1611634" | serial == "V10O1611698" | serial == "V10O1611722") %>%
+  group_by(DT, TIME) %>% summarise( pm10 = mean(pm10, na.rm = T), pm25 = mean(pm25, na.rm = T), 
+                                    noise = mean(noise, na.rm = T), temp = mean(temp, na.rm = T), humi = mean(humi, na.rm = T)) %>%
+  mutate(HDONG_CD = 110600) %>% select(DT, TIME, HDONG_CD, everything()) %>% write_rds("hdong/H110600.rds")
+
+mydata %>% filter(serial %in% c("V10O1610546", "V10O1610540", "V10O1610542", "V10O1610543", "V10O1610544", "V10O1610545",
+                                "V10O1610567", "V10O1612113", "V10O1611145", "V10O1611750", "V10O1611684", "V10O1611173")) %>%
+  group_by(DT, TIME) %>% summarise( pm10 = mean(pm10, na.rm = T), pm25 = mean(pm25, na.rm = T), 
+                                    noise = mean(noise, na.rm = T), temp = mean(temp, na.rm = T), humi = mean(humi, na.rm = T)) %>%
+  mutate(HDONG_CD = 110615) %>% select(DT, TIME, HDONG_CD, everything()) %>% write_rds("hdong/H110615.rds")
+
+
+mydata %>% filter(serial == "V10O1611255") %>% rename(HDONG_CD = serial) %>% mutate(HDONG_CD = 110630) %>% write_rds("hdong/H110630.rds")
+
+mydata %>% filter(serial == "V10O1611658") %>% rename(HDONG_CD = serial) %>% mutate(HDONG_CD = 110640) %>% write_rds("hdong/H110640.rds")
+
+
+mydata %>% filter(serial %in% c("V10O1611623", "V10O1611645")) %>%
+  group_by(DT, TIME) %>% summarise( pm10 = mean(pm10, na.rm = T), pm25 = mean(pm25, na.rm = T), 
+                                    noise = mean(noise, na.rm = T), temp = mean(temp, na.rm = T), humi = mean(humi, na.rm = T)) %>%
+  mutate(HDONG_CD = 110650) %>% select(DT, TIME, HDONG_CD, everything()) %>% write_rds("hdong/H110650.rds")
+
+
+mydata %>% filter(serial %in% c("V10O1611151", "V10O1611220")) %>%
+  group_by(DT, TIME) %>% summarise( pm10 = mean(pm10, na.rm = T), pm25 = mean(pm25, na.rm = T), 
+                                    noise = mean(noise, na.rm = T), temp = mean(temp, na.rm = T), humi = mean(humi, na.rm = T)) %>%
+  mutate(HDONG_CD = 110670) %>% select(DT, TIME, HDONG_CD, everything()) %>% write_rds("hdong/H110670.rds")
+
+mydata %>% filter(serial == "V10O1611151"| serial== "V10O1611251"| serial=="V10O1611639"|serial== "V10O1611220"|serial== "V10O1612106"|serial== "V10O1611658") %>% 
+  group_by(DT, TIME) %>% summarise( pm10 = mean(pm10, na.rm = T), pm25 = mean(pm25, na.rm = T), 
+                                    noise = mean(noise, na.rm = T), temp = mean(temp, na.rm = T), humi = mean(humi, na.rm = T)) %>%
+  mutate(HDONG_CD = 110680) %>% select(DT, TIME, HDONG_CD, everything())%>% write_rds("hdong/H110680.rds")
+
+mydata %>% filter(serial == "V10O1611251") %>% rename(HDONG_CD = serial) %>% mutate(HDONG_CD = 110690) %>% write_rds("hdong/H110690.rds")
+
+mydata %>% filter(serial == "V10O1611251") %>% rename(HDONG_CD = serial) %>% mutate(HDONG_CD = 110700) %>% write_rds("hdong/H110700.rds")
+
+mydata %>% filter(serial == "V10O1612106") %>% rename(HDONG_CD = serial) %>% mutate(HDONG_CD = 110710) %>% write_rds("hdong/H110710.rds")
+
+```
+
+#### 노원구 행정동 19개 기상데이터 할당하기 
+```{r, eval=FALSE}
+mydata %>% filter(serial == "V10O1611229") %>% rename(HDONG_CD = serial) %>% mutate(HDONG_CD = 350560) %>% write_rds("hdong/H350560.rds")
+
+mydata %>% filter(serial == "V10O1611229") %>% rename(HDONG_CD = serial) %>% mutate(HDONG_CD = 350570) %>% write_rds("hdong/H350570.rds")
+
+mydata %>% filter(serial == "V10O1610643"|serial == "V10O1610630"|serial == "V10O1611229"|serial == "V10O1610629") %>% 
+  group_by(DT, TIME) %>% summarise( pm10 = mean(pm10, na.rm = T), pm25 = mean(pm25, na.rm = T), 
+                                    noise = mean(noise, na.rm = T), temp = mean(temp, na.rm = T), humi = mean(humi, na.rm = T)) %>%
+  mutate(HDONG_CD = 350580) %>% select(DT, TIME, HDONG_CD, everything())%>% write_rds("hdong/H350580.rds")
+
+mydata %>% filter(serial %in% c("V10O1610629", "V10O1610630", "V10O1610642", "V10O1610643", "V10O1611229", "V10O1611652", "V10O1610610")) %>%
+  group_by(DT, TIME) %>% summarise( pm10 = mean(pm10, na.rm = T), pm25 = mean(pm25, na.rm = T), 
+                                    noise = mean(noise, na.rm = T), temp = mean(temp, na.rm = T), humi = mean(humi, na.rm = T)) %>%
+  mutate(HDONG_CD = 350595) %>% select(DT, TIME, HDONG_CD, everything()) %>% write_rds("hdong/H350595.rds")
+
+mydata %>% filter(serial %in% c("V10O1610642", "V10O1611652","V10O1610630", "V10O1610629", "V10O1610643", "V10O1610610", "V10O1611229", "V10O1610102")) %>%
+  group_by(DT, TIME) %>% summarise( pm10 = mean(pm10, na.rm = T), pm25 = mean(pm25, na.rm = T), 
+                                    noise = mean(noise, na.rm = T), temp = mean(temp, na.rm = T), humi = mean(humi, na.rm = T)) %>%
+  mutate(HDONG_CD = 350600) %>% select(DT, TIME, HDONG_CD, everything()) %>% write_rds("hdong/H350600.rds")
+
+mydata %>% filter(serial %in% c("V10O1610610", "V10O1610102", "V10O1612126", "V10O1611097")) %>%
+  group_by(DT, TIME) %>% summarise( pm10 = mean(pm10, na.rm = T), pm25 = mean(pm25, na.rm = T), 
+                                    noise = mean(noise, na.rm = T), temp = mean(temp, na.rm = T), humi = mean(humi, na.rm = T)) %>%
+  mutate(HDONG_CD = 350611) %>% select(DT, TIME, HDONG_CD, everything()) %>% write_rds("hdong/H350611.rds")
+
+mydata %>% filter(serial %in% c("V10O1610610", "V10O1610102", "V10O1611652", "V10O1610629")) %>% 
+  group_by(DT, TIME) %>% summarise( pm10 = mean(pm10, na.rm = T), pm25 = mean(pm25, na.rm = T), 
+                                    noise = mean(noise, na.rm = T), temp = mean(temp, na.rm = T), humi = mean(humi, na.rm = T)) %>%
+  mutate(HDONG_CD = 350612) %>% select(DT, TIME, HDONG_CD, everything()) %>% write_rds("hdong/H350612.rds")
+
+mydata %>% filter(serial == "V10O1612126") %>% rename(HDONG_CD = serial) %>% mutate(HDONG_CD = 350619) %>% write_rds("hdong/H350619.rds")
+
+mydata %>% filter(serial == "V10O1612126") %>% rename(HDONG_CD = serial) %>% mutate(HDONG_CD = 350621) %>% write_rds("hdong/H350621.rds")
+
+mydata %>% filter(serial %in% c("V10O1610297", "V10O1611100", "V10O1610616")) %>% 
+  group_by(DT, TIME) %>% summarise( pm10 = mean(pm10, na.rm = T), pm25 = mean(pm25, na.rm = T), 
+                                    noise = mean(noise, na.rm = T), temp = mean(temp, na.rm = T), humi = mean(humi, na.rm = T)) %>%
+  mutate(HDONG_CD = 350624) %>% select(DT, TIME, HDONG_CD, everything())%>% write_rds("hdong/H350624.rds")
+
+mydata %>% filter(serial %in% c("V10O1611097", "V10O1610610", "V10O1612126")) %>% 
+  group_by(DT, TIME) %>% summarise( pm10 = mean(pm10, na.rm = T), pm25 = mean(pm25, na.rm = T), 
+                                    noise = mean(noise, na.rm = T), temp = mean(temp, na.rm = T), humi = mean(humi, na.rm = T)) %>%
+  mutate(HDONG_CD = 350625) %>% select(DT, TIME, HDONG_CD, everything())%>% write_rds("hdong/H350625.rds")
+
+mydata %>% filter(serial %in% c("V10O1610356", "V10O1611102", "V10O1610616")) %>% 
+  group_by(DT, TIME) %>% summarise( pm10 = mean(pm10, na.rm = T), pm25 = mean(pm25, na.rm = T), 
+                                    noise = mean(noise, na.rm = T), temp = mean(temp, na.rm = T), humi = mean(humi, na.rm = T)) %>%
+  mutate(HDONG_CD = 350630) %>% select(DT, TIME, HDONG_CD, everything())%>% write_rds("hdong/H350630.rds")
+
+mydata %>% filter(serial %in% c("V10O1610616", "V10O1610200", "V10O1610312", "V10O1611100")) %>%
+  group_by(DT, TIME) %>% summarise( pm10 = mean(pm10, na.rm = T), pm25 = mean(pm25, na.rm = T), 
+                                    noise = mean(noise, na.rm = T), temp = mean(temp, na.rm = T), humi = mean(humi, na.rm = T)) %>%
+  mutate(HDONG_CD = 350640) %>% select(DT, TIME, HDONG_CD, everything()) %>% write_rds("hdong/H350640.rds")
+
+mydata %>% filter(serial == "V10O1611150") %>% rename(HDONG_CD = serial) %>% mutate(HDONG_CD = 350665) %>% write_rds("hdong/H350665.rds")
+
+mydata %>% filter(serial %in% c("V10O1610297", "V10O1611102")) %>%
+  group_by(DT, TIME) %>% summarise( pm10 = mean(pm10, na.rm = T), pm25 = mean(pm25, na.rm = T), 
+                                    noise = mean(noise, na.rm = T), temp = mean(temp, na.rm = T), humi = mean(humi, na.rm = T)) %>%
+  mutate(HDONG_CD = 350670) %>% select(DT, TIME, HDONG_CD, everything()) %>% write_rds("hdong/H350670.rds")
+
+mydata %>% filter(serial %in% c("V10O1610376", "V10O1610351", "V10O1611104")) %>%
+  group_by(DT, TIME) %>% summarise( pm10 = mean(pm10, na.rm = T), pm25 = mean(pm25, na.rm = T), 
+                                    noise = mean(noise, na.rm = T), temp = mean(temp, na.rm = T), humi = mean(humi, na.rm = T)) %>%
+  mutate(HDONG_CD = 350695) %>% select(DT, TIME, HDONG_CD, everything()) %>% write_rds("hdong/H350695.rds")
+
+mydata %>% filter(serial %in% c("V10O1610356", "V10O1610293", "V10O1611102")) %>%
+  group_by(DT, TIME) %>% summarise( pm10 = mean(pm10, na.rm = T), pm25 = mean(pm25, na.rm = T), 
+                                    noise = mean(noise, na.rm = T), temp = mean(temp, na.rm = T), humi = mean(humi, na.rm = T)) %>%
+  mutate(HDONG_CD = 350700) %>% select(DT, TIME, HDONG_CD, everything())%>% write_rds("hdong/H350700.rds")
+
+mydata %>% filter(serial == "V10O1611102") %>% rename(HDONG_CD = serial) %>% mutate(HDONG_CD = 350710) %>% write_rds("hdong/H350710.rds")
+
+mydata %>% filter(serial %in%c("V10O1610293", "V10O1611102", "V10O1610616", "V10O1610200", "V10O1610312")) %>% 
+  group_by(DT, TIME) %>% summarise( pm10 = mean(pm10, na.rm = T), pm25 = mean(pm25, na.rm = T), 
+                                    noise = mean(noise, na.rm = T), temp = mean(temp, na.rm = T), humi = mean(humi, na.rm = T)) %>%
+  mutate(HDONG_CD = 350720) %>% select(DT, TIME, HDONG_CD, everything())%>% write_rds("hdong/H350720.rds")
+```
+
+#### 총 36개의 행정구 rbind
+```{r, eval=FALSE}
+df <- list.files(path='hdong', pattern = ".rds",full.names=T) %>% map(readRDS) %>% data.table::rbindlist(use.names=TRUE)
+df <- as_tibble(df)
+df1 <- df
+df1$TIME <- as.character(df1$TIME)
+df1 <- df1 %>% mutate(TIME2 = ifelse(nchar(TIME) %in% c(1,2) , paste0("00",TIME),TIME))
+df1$TIME2 <- sub("(\\d+)(\\d{2})" , "\\1:\\2", df1$TIME2)
+df1 <- df1 %>% separate(TIME2, c("HOUR","MIN"),sep=":",convert=T)
+df <- df1 %>% select(-TIME) %>% select(DT,HOUR,MIN,HDONG_CD,pm10,noise,temp,humi,pm25)
+write_rds(df, 'pre/hdong_mean0807.rds')
+
+dust = read_rds("pre/hdong_mean0807.rds")
+dust2 = dust %>% group_by(DT, HOUR, HDONG_CD) %>% summarise(pm10 = mean(pm10, na.rm = T),
+                                                            pm25 = mean(pm25, na.rm = T),
+                                                            noise = mean(noise, na.rm = T),
+                                                            temp = mean(temp, na.rm = T),
+                                                            humi = mean(humi, na.rm = T)
+)
+```
+

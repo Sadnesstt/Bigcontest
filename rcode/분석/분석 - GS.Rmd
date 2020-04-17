@@ -1,0 +1,205 @@
+---
+title: "GSGS"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+setwd('C:/Users/user/Documents')
+setwd("./complete")
+```
+
+***
+***
+# GS 유통데이터 분석
+# 1. 미세먼지의 좋고나쁨과 매출의 높고낮음이 연관이 있는 행정동
+
+### 필요한 라이브러리 로드
+```{r}
+library(tidyverse)
+```
+
+### 필요한 데이터 로드
+```{r}
+
+gs = read_rds('./gs.rds')
+cd = read_rds('./cd.rds')
+wk = read_rds('./요일주말DTgb.rds')
+kwk = read_rds('./요일주말DTgb_kweather.rds')
+
+gs.kgb = as_tibble(read.csv("gs동별gb_kweather.csv"))
+
+comparison_real_vs_forecast = read_rds('comparison_real_vs_forecast.rds')
+```
+
+
+
+##### GS데이터의 HDONG_CD에 행정동명을 붙이자
+```{r}
+gs2 = gs %>% left_join(cd, by = "HDONG_CD")
+```
+
+##### 일별, 동별로 GS데이터와 미세먼지 좋고 나쁨을 key = DT로 붙이자.
+```{r}
+gs5= gs2 %>% left_join(kwk, by = c("DT", "HDONG_CD"))
+```
+
+```{r}
+
+gs4 = gs2 %>% left_join(kwk, by = c("HDONG_CD", "DT")) %>%
+      group_by(HDONG, DT, weekend, gb ) %>%
+       summarise(mAMT = mean(AMT_IND, na.rm = T),
+            m10 = mean(LCLS_10_P, na.rm = T) , m20 = mean(LCLS_20_P, na.rm = T) , 
+            m30 = mean(LCLS_30_P, na.rm = T) , m40 = mean(LCLS_40_P, na.rm = T) , 
+            m50 = mean(LCLS_50_P, na.rm = T) , m60 = mean(LCLS_60_P, na.rm = T) , 
+            m70 = mean(LCLS_70_P, na.rm = T) , m80 = mean(LCLS_80_P, na.rm = T) )
+gs4$DT = parse_date(as.character(gs4$DT), "%Y%m%d")
+
+kf2 = comparison_real_vs_forecast %>% group_by(DT, HDONG_CD) %>% summarise(f10m = mean(f10), f25m = mean(f25))
+kf2[kf2$f10m<2 & kf2$f25m<2,"gb"] = "kgood"
+kf2[kf2$f10m>2 & kf2$f25m>2,"gb"] = "kbad"
+kwk = right_join(kf2, wk[,-4], by = "DT") %>% select(DT,day, weekend, HDONG_CD,gb) %>% arrange(DT)
+write_rds(kwk, "요일주말DTgb_kweather.rds")
+
+kf3 = kf2 %>% group_by(DT) %>% summarise(f10m = mean(f10m), f25m = mean(f25m))
+kf3[kf3$f10m<2 & kf3$f25m<2, 'gb'] = 'kgood'
+kf3[kf3$f10m>2 & kf3$f25m>2, 'gb'] = 'kbad'
+kf3$DT =  parse_date(as.character(kf3$DT),"%Y%m%d")
+
+gs4.sum = gs4 %>% group_by(DT) %>% summarise(mAMT = mean(mAMT, na.rm = T))
+gs4.sum = left_join(gs4.sum, kf3, by = 'DT')
+```
+
+
+***
+***
+
+##### 각 동별로 GS총매출 좋은날, 나쁜날을 나누어보자. 기준은 각 동마다의 총매출 중앙값이다.
+
+##### 동별로, GS총매출의 높은날과 낮은날 그리고 kweather 미세먼지 데이터 좋은날 나쁜날의 2x2 table생성을 해서 보자
+```{r}
+for(i in 1:36){
+   hdong = unique(gs5$HDONG)[i]
+   for_gs = gs5 %>% filter(HDONG == hdong)
+   hdong_med = median(for_gs$AMT_IND, na.rm = T)
+   for_gs$COUNT = ifelse(for_gs$AMT_IND > hdong_med,"upper", "lower")
+   print('')
+   print(paste0(hdong,"총매출 lower upper와 kweather 미세먼지 bad good에 대한 2x2 table"))
+   print(table(for_gs$COUNT, for_gs$gb)) 
+   }
+```
+
+***
+***
+
+### 위의 table data를 가지고 2x2 교차검정 chi-squre test해보자.
+##### 미세먼지의 좋고나쁨과 GS총매출의 높고낮음이 서로 독립인지 카이제곱검정을 해보았다.
+##### 귀무가설: 미세먼지의 좋고나쁨과 GS총매출의 높고낮음은 서로 독립이다. 서로 연관이 없다.
+##### 대립가설: 미세먼지의 좋고나쁨과 GS총매출의 높고낮음은 서로 독립이 아니고 연관이 있다.
+```{r}
+for(i in 1:36){
+   hdong = unique(gs5$HDONG)[i]
+   for_gs = gs5 %>% filter(HDONG == hdong)
+   hdong_med = median(for_gs$AMT_IND, na.rm = T)
+   for_gs$COUNT = ifelse(for_gs$AMT_IND > hdong_med,"upper", "lower")
+   print('')
+   print(paste(hdong, "미먼과 gs매출이 독립적인지"))
+   print(chisq.test(for_gs$COUNT, for_gs$gb)$p.value
+	   )
+   }
+```
+
+##### --> 유의수준 0.05하에서 종로구의 사직동, 삼청동, 부암동, 이화동, 창신3동, 노원구 월계1동을 제외하고 
+##### 나머지 30개동은 미세먼지의 좋고나쁨과 매출의 높고낮음이 연관이 있다는 통계적 결과가 나왔다.
+
+### 그러나,  미세먼지는 계절성을 띈다. 매출 역시 계절성을 띄는 듯 하다.
+##### 우선 미세먼지 관측시 good, bad정도를 보면 여름에 good이고 겨울과 봄에 bad인 걸 알 수 있다. 미세먼지는 계절성을 띈다.
+```{r}
+
+gs4.sum %>% ggplot + 	geom_rect(aes(xmin = DT, xmax = DT+1, fill=gb), ymin = -Inf, ymax = Inf, alpha =0.5) +
+	ggtitle(paste0("kweather배경 gs매출_","종로구 노원구"))
+```
+
+##### 종로구와 노원구 GS총매출의 일별 평균을 보면 여름에 높고 겨울에 낮다. 총매출 역시 계절성을 띈다.
+```{r}
+gs4.sum %>% ggplot + geom_line(stat = 'identity',  aes(DT, mAMT)) +
+	ggtitle(paste0("kweather배경 gs매출_","종로구 노원구"))
+```
+
+##### 둘을 겹쳐서 그려보면 아래와 같다. 
+##### 빨간 가로선은 종로구와 노원구 총매출의 일별 평균을 일마다 낸 365개 값의 중앙값이다.
+##### 파란 세로선은 월 구분 선이다.
+```{r}
+gs4.sum %>% ggplot + 	geom_rect(aes(xmin = DT, xmax = DT+1, fill=gb), ymin = -Inf, ymax = Inf, alpha =0.5)+
+      geom_line(stat = 'identity',  aes(DT, mAMT)) + 
+		geom_hline(yintercept = median(gs4.sum$mAMT), col = "red")+
+	geom_vline(xintercept=as.Date(c("2018-04-01","2018-05-01","2018-06-01","2018-07-01",
+		"2018-08-01","2018-09-01","2018-10-01","2018-11-01","2018-12-01",
+		"2019-01-01","2019-02-01","2019-03-01","2019-04-01")), color='blue', size=0.1) +
+	ggtitle(paste0("kweather배경 gs매출_","종로구 노원구"))
+```
+
+##### 미세먼지도 계절성을 따르고, 매출도 계절성을 따른다. 따라서 미세먼지와 매출의 연관성은 계절을 통제했을 때 없을 수도 있다.
+
+
+***
+***
+
+
+##### 따라서, 월별이라는 범주형 변수를 통제한 상태에서도 미세먼지의 좋고나쁨과 GS총매출의 높고낮음이 서로 연관이 있는지 Mantel Haenszel test로 확인해보자.
+##### 귀무가설: 월 변수를 통제했을때, 미세먼지의 좋고나쁨과 GS총매출의 높고 낮음은 독립이다. 서로 연관이 없다.
+##### 대립가설: 월 변수 요인을 제거했을 때, 미세먼지의 좋고나쁨과 GS총매출의 높고 낮음은 서로 독립이 아니고 연관이 있다.
+
+```{r}
+for(i in 1:36){
+    hdong = unique(gs5$HDONG)[i]
+    for_gs = gs5 %>% filter(HDONG == hdong)
+    hdong_med = median(for_gs$AMT_IND, na.rm = T)
+    for_gs$COUNT = ifelse(for_gs$AMT_IND > hdong_med,"upper", "lower")
+    fgs = for_gs %>% separate(DT, c("Y","M","D"), c(4,-2))
+    print('')
+    print(paste(hdong, "월 수준에 따라 미먼과 gs매출이 차이가 나는지"))
+    print((mantelhaen.test(xtabs(~COUNT+gb+M, data = fgs)))$p.value)
+    }
+```
+
+##### 유의수준 0.05하에서, 36개의 동 중 32개의 동은 귀무가설을 기각하지 못한다.
+##### **종로구의 청운효자동, 노원구의 월계2동,중계2·3동,상계10동** 만이 귀무가설을 기각한다.
+##### 이 4개의 동은 월 변수 요인과 관계없이, 미세먼지의 좋고나쁨은 GS총매출의 높고낮음과 연관이 있다.
+##### 이 **4개의 동은 GS 총매출이 미세먼지에 민감한 지역**이라 생각할 수 있다.
+
+
+***
+***
+
+
+# 2. 상품군 별 매출
+##### 데이터의 형태를 바꾸자
+```{r}
+gs.kgb2 = gs.kgb %>% gather( c("mAMT",paste0('m',1:8,'0')) , key = 'CAT', value = "amt" )
+```
+
+##### 36개동의 미세머지 좋은날, 나쁜날 GS 카테고리별 매출 평균을 비교해보았다. 미세먼지 나쁜 날의 매출 평균이 더 높은 동의 개수와, 36개 동 중의 percent로 표시했다. 주중, 주말로 나누어 살펴봤다. 
+##### 음료는 항상 미세먼지 나쁜날 매출액 평균이 항상 더 낮고, 간식은 63.9~66.7%의 동이 미세먼지가 나쁜 날 매출량 평균이 더 높다.
+
+```{r}
+gs.kgb2$CAT = factor(gs.kgb2$CAT)
+a = round(table(gs.kgb2  %>% filter(gb == 'ratio', weekend == '주중', amt >= 1) %>% select(CAT))/36 , 3)
+b = round(table(gs.kgb2  %>% filter(gb == 'ratio', weekend == '주말', amt >= 1) %>% select(CAT))/36 , 3)
+c = round(table(gs.kgb2  %>% filter(gb == 'ratio',amt >= 1) %>% select(CAT))/72 , 3)
+aa = table(gs.kgb2  %>% filter(gb == 'ratio', weekend == '주중', amt >= 1) %>% select(CAT))
+bb = table(gs.kgb2  %>% filter(gb == 'ratio', weekend == '주말', amt >= 1) %>% select(CAT))
+cc = table(gs.kgb2  %>% filter(gb == 'ratio',amt >= 1) %>% select(CAT))
+
+
+abc = rbind(aa,a,bb,b,cc,c)
+rownames(abc) = c("주중 count", "주중 percent", "주말 count", "주말 percent", "전체 count", "전체 percent")
+abc
+write.csv(abc, 'gs ratio table.csv')
+
+
+```

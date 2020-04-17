@@ -1,0 +1,207 @@
+# **EDA 블로그 텍스트 마이닝**
+```{r, eval=FALSE}
+library(tidyverse)
+library(rJava)
+library(KoNLP)
+library(tm)
+useNIADic()
+library(reshape2)
+library(slam)
+library(lda)
+library(LDAvis)
+library(topicmodels)
+library(lsa)
+```
+
+#### 사전에 미세먼지 관련 단어 업데이트
+```{r, eval=FALSE}
+mergeUserDic(data.frame(c("피엠십","피엠이점오","초미세먼지","마스크팩","클렌","에어드레서","샘플","고객","차량이부제"),"ncn"))
+```
+
+#### 불러 들이기
+```{r, eval=FALSE}
+blog <- read_rds('complete/blog.rds')
+```
+
+#### 중복 제거
+```{r, eval=FALSE}
+blog<- blog[-which(duplicated(blog$CONTENT)),]
+```
+
+#### na 제거
+```{r, eval=FALSE}
+blog <- blog[!is.na(blog$CONTENT),]
+```
+
+#### DT 분리(기간별 키워드 뽑기 위해)
+```{r, eval=FALSE}
+blog <- blog %>% separate(DT, c("year","month","day"),sep=c(4,6),convert=T)
+```
+
+#### pm2.5와 pm10을 피엠이점오와 피엠십 치환(영어를 소문자로 치환 후)
+```{r, eval=FALSE}
+blog$CONTENT <- tolower(blog$CONTENT)
+blog$CONTENT <- str_replace_all(blog$CONTENT,"pm 10","피엠십")
+blog$CONTENT <- str_replace_all(blog$CONTENT,"pm 2.5","피엠이점오")
+blog$CONTENT <- str_replace_all(blog$CONTENT,"pm10","피엠십")
+blog$CONTENT <- str_replace_all(blog$CONTENT,"pm2.5","피엠이점오")
+blog$CONTENT <- str_replace_all(blog$CONTENT,"pm 25","피엠이점오")
+blog$CONTENT <- str_replace_all(blog$CONTENT,"pm25","피엠이점오")
+```
+
+#### 미세먼지 표현
+```{r, eval=FALSE}
+blog$CONTENT <- str_replace_all(blog$CONTENT,"미세먼지","미세먼지 ")
+blog$CONTENT <- str_replace_all(blog$CONTENT,"미세 먼지","미세먼지")
+blog$CONTENT <- str_replace_all(blog$CONTENT,"미먼","미세먼지")
+blog$CONTENT <- str_replace_all(blog$CONTENT,"초 미세먼지","초미세먼지")
+```
+#### 차량2부제
+```{r, eval=FALSE}
+blog$CONTENT <- str_replace_all(blog$CONTENT,"차량 2부제","차량이부제 ")
+blog$CONTENT <- str_replace_all(blog$CONTENT,"차량2부제","차량이부제")
+blog$CONTENT <- str_replace_all(blog$CONTENT,"2부제","이부제")
+blog$CONTENT <- str_replace_all(blog$CONTENT,"2 부제","이부제")
+```
+
+#### 마스크팩 표현
+```{r, eval=FALSE}
+blog$CONTENT <- str_replace_all(blog$CONTENT,"마스크 팩","마스크팩 ")
+blog$CONTENT <- str_replace_all(blog$CONTENT,"팩","마스크팩")
+
+write_rds(blog, 'complete/blog_preprocessed.rds')
+```
+
+#### blog good or bad day 전처리
+```{r, eval=FALSE}
+forecast <- read.csv('pre/forecast.csv')
+forecast <- forecast %>% group_by(DT) %>% summarise(F10=mean(F10,na.rm=T),F25=mean(F25,na.rm=T))
+goodDT <- forecast %>% filter(F10<2 & F25<2) %>% select(DT)
+goodDT <- as.vector(goodDT$DT)
+goodDT <- as.character(goodDT)
+badDT <- forecast %>% filter(F10>2 & F25>2) %>% select(DT)
+badDT <- as.vector(badDT$DT)
+badDT <- as.character(badDT)
+blog2 <- blog %>% mutate(month2=ifelse(month>=10, month, paste0("0",month)),
+                         day2=ifelse(day>=10, day, paste0("0",day))) %>% unite(DT, c(year,month2,day2),sep="")%>%select(DT,CONTENT)
+news_good <- blog2 %>% filter(DT %in% c(goodDT))
+news_bad <- blog2 %>% filter(DT %in% c(badDT))
+
+write_rds(blog_good, 'complete/blog_good.rds')
+write_rds(blog_bad, 'complete/blog_bad.rds')
+```
+
+
+#### 불용어 제거(txt파일) 출처 : https://www.ranks.nl/stopwords/korean
+```{r, eval=FALSE}
+stopwords <- c(readLines("pre/user_stopwords_blog0823.txt"))
+
+myvector <- function(i){
+  subset <- blog %>% filter(month == i) %>% select("CONTENT")
+  subset_clean <- sapply(subset, function(contents) gsub("[^가-힣]"," ",contents))
+  
+  for(j in 1:length(stopwords)){
+    subset_clean <- gsub(stopwords[j],"",subset_clean)
+  }
+  return(subset_clean)
+}
+
+
+subset_clean <- paste0("blog_clean",1:12)
+for (i in 1:12){
+  assign(subset_clean[i], myvector(i))
+}
+
+```
+
+#### blog 코퍼스 및 TDM.tf 구축 
+```{r, eval=FALSE}
+Noun <- function(doc){
+  d <- as.character(doc)
+  d2 <- paste(SimplePos09(d))
+  d3 <- str_match(d2,"([가-힣]+)/N")
+  d4 <- d3[,2]
+  d4[!is.na(d4)]
+}
+
+blog1.cps <- VCorpus(VectorSource(blog_clean1))
+blog1.cps <- tm_map(blog1.cps, stripWhitespace)
+
+blog2.cps <- VCorpus(VectorSource(blog_clean2))
+blog2.cps <- tm_map(blog2.cps, stripWhitespace)
+
+blog3.cps <- VCorpus(VectorSource(blog_clean3))
+blog3.cps <- tm_map(blog3.cps, stripWhitespace)
+
+blog4.cps <- VCorpus(VectorSource(blog_clean4))
+blog4.cps <- tm_map(blog4.cps, stripWhitespace)
+
+blog5.cps <- VCorpus(VectorSource(blog_clean5))
+blog5.cps <- tm_map(blog5.cps, stripWhitespace)
+
+blog6.cps <- VCorpus(VectorSource(blog_clean6))
+blog6.cps <- tm_map(blog6.cps, stripWhitespace)
+
+blog7.cps <- VCorpus(VectorSource(blog_clean7))
+blog7.cps <- tm_map(blog7.cps, stripWhitespace)
+
+blog8.cps <- VCorpus(VectorSource(blog_clean8))
+blog8.cps <- tm_map(blog8.cps, stripWhitespace)
+
+blog9.cps <- VCorpus(VectorSource(blog_clean9))
+blog9.cps <- tm_map(blog9.cps, stripWhitespace)
+
+blog10.cps <- VCorpus(VectorSource(blog_clean10))
+blog10.cps <- tm_map(blog10.cps, stripWhitespace)
+
+
+blog11.cps <- VCorpus(VectorSource(blog_clean11))
+blog11.cps <- tm_map(blog11.cps, stripWhitespace)
+
+
+blog12.cps <- VCorpus(VectorSource(blog_clean12))
+blog12.cps <- tm_map(blog12.cps, stripWhitespace)
+
+```
+
+#### 월별 TDM 구축
+```{r, eval=FALSE}
+blog1.TDM.tf <- TermDocumentMatrix(month1.cps, control=list(tokenize=Noun,wordLengths=c(2,5)))
+write_rds(blog1.TDM.tf, 'complete/blog1.TDM.tf.rds')
+
+blog2.TDM.tf <- TermDocumentMatrix(month2.cps, control=list(tokenize=Noun,wordLengths=c(2,5)))
+write_rds(blog2.TDM.tf, 'complete/blog2.TDM.tf.rds')
+
+blog3.TDM.tf <- TermDocumentMatrix(month3.cps, control=list(tokenize=Noun,wordLengths=c(2,5)))
+write_rds(blog3.TDM.tf, 'complete/blog3.TDM.tf.rds')
+
+blog4.TDM.tf <- TermDocumentMatrix(month4.cps, control=list(tokenize=Noun,wordLengths=c(2,5)))
+write_rds(blog4.TDM.tf, 'complete/blog4.TDM.tf.rds')
+
+blog5.TDM.tf <- TermDocumentMatrix(month5.cps, control=list(tokenize=Noun,wordLengths=c(2,5)))
+write_rds(blog5.TDM.tf, 'complete/blog5.TDM.tf.rds')
+
+blog6.TDM.tf <- TermDocumentMatrix(month6.cps, control=list(tokenize=Noun,wordLengths=c(2,5)))
+write_rds(blog6.TDM.tf, 'complete/blog6.TDM.tf.rds')
+
+blog7.TDM.tf <- TermDocumentMatrix(month7.cps, control=list(tokenize=Noun,wordLengths=c(2,5)))
+write_rds(blog7.TDM.tf, 'complete/blog7.TDM.tf.rds')
+
+blog8.TDM.tf <- TermDocumentMatrix(month8.cps, control=list(tokenize=Noun,wordLengths=c(2,5)))
+write_rds(blog8.TDM.tf, 'complete/blog8.TDM.tf.rds')
+
+blog9.TDM.tf <- TermDocumentMatrix(month9.cps, control=list(tokenize=Noun,wordLengths=c(2,5)))
+write_rds(blog9.TDM.tf, 'complete/blog9.TDM.tf.rds')
+
+blog10.TDM.tf <- TermDocumentMatrix(month10.cps, control=list(tokenize=Noun,wordLengths=c(2,5)))
+write_rds(blog10.TDM.tf, 'complete/blog10.TDM.tf.rds')
+
+blog11.TDM.tf <- TermDocumentMatrix(month11.cps, control=list(tokenize=Noun,wordLengths=c(2,5)))
+write_rds(blog11.TDM.tf, 'complete/blog11.TDM.tf.rds')
+
+blog12.TDM.tf <- TermDocumentMatrix(month12.cps, control=list(tokenize=Noun,wordLengths=c(2,5)))
+write_rds(blog12.TDM.tf, 'complete/blog12.TDM.tf.rds')
+
+
+```
+

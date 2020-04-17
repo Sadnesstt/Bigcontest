@@ -1,0 +1,170 @@
+---
+title: "ratio data 생성"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# 데이터 전처리: 미세먼지 good, bad ratio 데이터 생성
+
+##### library load
+```{r}
+library(tidyverse)
+library(dplyr)
+```
+
+##### data load
+```{r}
+getwd()
+gs = read_rds('./complete/gs.rds')
+cd = read_rds('./complete/cd.rds')
+wk = read_rds('./complete/요일주말DTgb.rds')
+kwk = read_rds('./complete/요일주말DTgb_kweather.rds')
+flow.sexage = read_rds("./complete/flow.sexage_data(나이통일한거).rds")
+flow.sexage.spread = read_rds("./complete/flow.sexage.spread.rds")
+flow.time = read_rds("./complete/flow.time.rds")
+
+# GS데이터 이상치 제거 
+gs = gs %>% filter(!DT %in% c(20180214, 20180314, 20181110, 20181111))
+
+```
+
+# ratio 데이터 생성
+
+##### 상대지수(카테고리별 매출비중)을 절대지수(카테고리별 매출비중 * 해당 날짜 매출지수)로 변경한 gs2데이터 생성
+```{r}
+gs2 = gs
+for(i in 4:11){
+	gs2[,i] = gs2[,i]*gs[,3]
+	}
+
+write_rds(gs2, "gs.abs.rds")
+```
+
+# 행정동별로, GS 미세먼지 good, bad인 날 매출 평균 비교 ratio 데이터 생성
+```{r}
+gs3 = left_join(gs2, cd, by = 'HDONG_CD')
+
+trim.data = NULL
+
+for( i in 1:36){
+
+	hdong = unique(gs3$HDONG)[i]
+
+	trim = 
+		gs3 %>% filter(HDONG == hdong) %>% left_join(kwk, by = c("HDONG_CD", "DT")) %>%
+			 filter(weekend == "주중") %>% group_by(HDONG, weekend, gb) %>% summarise(mAMT = mean(AMT_IND, na.rm = T),
+				m10 = mean(LCLS_10_P, na.rm = T) , m20 = mean(LCLS_20_P, na.rm = T) , 
+				m30 = mean(LCLS_30_P, na.rm = T) , m40 = mean(LCLS_40_P, na.rm = T) , 
+				m50 = mean(LCLS_50_P, na.rm = T) , m60 = mean(LCLS_60_P, na.rm = T) , 
+				m70 = mean(LCLS_70_P, na.rm = T) , m80 = mean(LCLS_80_P, na.rm = T) )
+
+	trim[3,3] = "ratio"
+	trim[3,4:12] = trim[1,4:12]/trim[2,4:12]
+
+	trim.data = rbind(trim.data, trim)
+
+	trim = 
+		gs3 %>% filter(HDONG == hdong) %>% left_join(kwk, by = c("HDONG_CD", "DT")) %>%
+			 filter(weekend == "주말") %>% group_by(HDONG, weekend, gb) %>% summarise(mAMT = mean(AMT_IND, na.rm = T),
+				m10 = mean(LCLS_10_P, na.rm = T) , m20 = mean(LCLS_20_P, na.rm = T) , 
+				m30 = mean(LCLS_30_P, na.rm = T) , m40 = mean(LCLS_40_P, na.rm = T) , 
+				m50 = mean(LCLS_50_P, na.rm = T) , m60 = mean(LCLS_60_P, na.rm = T) , 
+				m70 = mean(LCLS_70_P, na.rm = T) , m80 = mean(LCLS_80_P, na.rm = T) )
+
+	trim[3,3] = "ratio"
+	trim[3,4:12] = trim[1,4:12]/trim[2,4:12]
+
+	trim.data = rbind(trim.data, trim)
+
+	}	
+
+trim.data
+
+write.csv(trim.data, "gs동별gb_kweather.csv", row.names = F)
+```
+
+
+# 행정동별로, flow sexage 데이터 미세먼지 good, bad인 날 유동인구 평균 비교 ratio 데이터 생성
+```{r}
+trim.data = NULL
+
+flow.sexage.spread2 = left_join(flow.sexage.spread, cd, by = 'HDONG_CD')
+
+for( i in 1:36){
+	hdong = unique(flow.sexage.spread2$HDONG)[i]
+	trim = flow.sexage.spread2 %>% filter(HDONG == hdong) %>% left_join(kwk, by = c("HDONG_CD", "DT")) %>%
+			 filter(weekend == "주중") %>% group_by(HDONG, weekend, gb) %>% summarise(
+				ALL = mean(ALL, na.rm = T),   F15 = mean(F_15, na.rm = T),
+				F20 = mean(F_20, na.rm = T) , F25 = mean(F_25, na.rm = T) , 
+				F30 = mean(F_30, na.rm = T) , F35 = mean(F_35, na.rm = T) , 
+				F40 = mean(F_40, na.rm = T) , F45 = mean(F_45, na.rm = T) , 
+				F50 = mean(F_50, na.rm = T) , F55 = mean(F_55, na.rm = T) , 
+				F60 = mean(F_60, na.rm = T) , F65 = mean(F_65, na.rm = T) , 
+				M15 = mean(M_15, na.rm = T) , 
+				M20 = mean(M_20, na.rm = T) , M25 = mean(M_25, na.rm = T) , 
+				M30 = mean(M_30, na.rm = T) , M35 = mean(M_35, na.rm = T) , 
+				M40 = mean(M_40, na.rm = T) , M45 = mean(M_45, na.rm = T) , 
+				M50 = mean(M_50, na.rm = T) , M55 = mean(M_55, na.rm = T) , 
+				M60 = mean(M_60, na.rm = T) , M65 = mean(M_65, na.rm = T) )
+	trim[3,3] = "ratio"
+	trim[3,4:26] = trim[1,4:26]/trim[2,4:26]
+	trim.data = rbind(trim.data, trim)
+
+	trim = flow.sexage.spread2 %>% filter(HDONG == hdong) %>% left_join(kwk, by = c("HDONG_CD", "DT")) %>%
+			 filter(weekend == "주말") %>% group_by(HDONG, weekend, gb) %>% summarise(
+				ALL = mean(ALL, na.rm = T),   F15 = mean(F_15, na.rm = T),
+				F20 = mean(F_20, na.rm = T) , F25 = mean(F_25, na.rm = T) , 
+				F30 = mean(F_30, na.rm = T) , F35 = mean(F_35, na.rm = T) , 
+				F40 = mean(F_40, na.rm = T) , F45 = mean(F_45, na.rm = T) , 
+				F50 = mean(F_50, na.rm = T) , F55 = mean(F_55, na.rm = T) , 
+				F60 = mean(F_60, na.rm = T) , F65 = mean(F_65, na.rm = T) , 
+				M15 = mean(M_15, na.rm = T) , 
+				M20 = mean(M_20, na.rm = T) , M25 = mean(M_25, na.rm = T) , 
+				M30 = mean(M_30, na.rm = T) , M35 = mean(M_35, na.rm = T) , 
+				M40 = mean(M_40, na.rm = T) , M45 = mean(M_45, na.rm = T) , 
+				M50 = mean(M_50, na.rm = T) , M55 = mean(M_55, na.rm = T) , 
+				M60 = mean(M_60, na.rm = T) , M65 = mean(M_65, na.rm = T) )
+	trim[3,3] = "ratio"
+	trim[3,4:26] = trim[1,4:26]/trim[2,4:26]
+	trim.data = rbind(trim.data, trim)
+	}	
+
+trim.data
+
+write.csv(trim.data, "flow.sexage동별gb_kweather.csv", row.names = F)
+```
+
+# 행정동별로, flow time 데이터 미세먼지 good, bad인 날 유동인구 평균 비교 ratio 데이터 생성
+```{r}
+flow.time = flow.time[,-3]
+flow.time2 = left_join(flow.time, cd, by = 'HDONG_CD')
+
+
+trim.data = NULL
+for( i in 1:36){
+	hdong = unique(flow.time2$HDONG)[i]
+
+	trim = 
+		flow.time2 %>% filter(HDONG == hdong) %>% left_join(kwk, by = c("HDONG_CD", "DT"))%>% filter(weekend == "주중") %>% group_by(HDONG, weekend, gb, TIME) %>%
+		summarise(mVALUE = mean(VALUE, na.rm = T)) %>% spread(key = TIME, value = mVALUE) 
+	trim[3,3] = "ratio"
+	trim[3,4:27] = trim[1,4:27]/trim[2,4:27]
+	trim.data = rbind(trim.data, trim)
+
+	trim = 
+		flow.time2 %>% filter(HDONG == hdong) %>%  left_join(kwk, by = c("HDONG_CD", "DT")) %>% filter(weekend == "주말") %>% group_by(HDONG, weekend, gb, TIME) %>%
+		summarise(mVALUE = mean(VALUE, na.rm = T)) %>% spread(key = TIME, value = mVALUE) 
+	trim[3,3] = "ratio"
+	trim[3,4:27] = trim[1,4:27]/trim[2,4:27]
+	trim.data = rbind(trim.data, trim)
+}
+
+trim.data
+
+write.csv(trim.data, "flow.time동별gb_kweather.csv", row.names = F)
+```
+

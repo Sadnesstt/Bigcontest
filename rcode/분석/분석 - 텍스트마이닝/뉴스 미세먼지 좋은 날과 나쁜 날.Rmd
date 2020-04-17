@@ -1,0 +1,146 @@
+# **EDA 뉴스 텍스트 마이닝2(미세먼지 좋은날/나쁜날)**
+```{r, eval=FALSE}
+library(tidyverse)
+library(rJava)
+library(KoNLP)
+library(tm)
+useNIADic()
+library(reshape2)
+library(slam)
+library(lda)
+library(LDAvis)
+library(topicmodels)
+library(lsa)
+```
+#### 사전에 미세먼지 관련 단어 업데이트
+```{r, eval=FALSE}
+mergeUserDic(data.frame(c("피엠십","피엠이점오","초미세먼지","마스크팩","클렌","에어드레서","샘플","고객","차량이부제"),"ncn"))
+```
+# **news_good/bad 텍스트마이닝**
+
+# 불용어 제거(txt파일) 출처 : https://www.ranks.nl/stopwords/korean
+```{r, eval=FALSE}
+ngood <- news_good %>% select("CONTENT")
+ngood_clean <- sapply(ngood, function(contents) gsub("[^가-힣]"," ",contents))
+
+for(j in 1:length(stopwords)){
+  ngood_clean <- gsub(stopwords[j],"",ngood_clean)
+}
+
+nbad <- news_bad %>% select("CONTENT")
+nbad_clean <- sapply(nbad, function(contents) gsub("[^가-힣]"," ",contents))
+
+for(j in 1:length(stopwords)){
+  nbad_clean <- gsub(stopwords[j],"",nbad_clean)
+}
+```
+#### 미세먼지 좋은날/ 나쁜날 TDM 구축
+```{r, eval=FALSE}
+ngood.cps <- VCorpus(VectorSource(ngood_clean))
+ngood.cps <- tm_map(ngood.cps, stripWhitespace)
+
+nbad.cps <- VCorpus(VectorSource(nbad_clean))
+nbad.cps <- tm_map(nbad.cps, stripWhitespace)
+
+
+ngood.TDM.tf <- TermDocumentMatrix(ngood.cps, control=list(tokenize=Noun,wordLengths=c(2,6)))
+ngood.TDM.tf2 <- removeSparseTerms(ngood.TDM.tf,sparse=0.99)
+write_rds(ngood.TDM.tf, 'complete/ngood.TDM.tf.rds')
+
+nbad.TDM.tf <- TermDocumentMatrix(nbad.cps, control=list(tokenize=Noun,wordLengths=c(2,6)))
+nbad.TDM.tf2 <- removeSparseTerms(nbad.TDM.tf,sparse=0.99)
+write_rds(nbad.TDM.tf, 'complete/nbad.TDM.tf.rds')
+```
+
+#### **news_good/bad 토픽모델**
+#### dtm으로 만들기(나중에 전처리)
+```{r, eval=FALSE}
+ngood.dtm <- as.DocumentTermMatrix(ngood.TDM.tf2)
+nbad.dtm <- as.DocumentTermMatrix(nbad.TDM.tf2)
+```
+
+#### lda 폼으로 만들고 MCMC 깁스 샘플링 돌리기
+```{r, eval=FALSE}
+ngood.ldaform <- dtm2ldaformat(ngood.dtm, omit_empty=F)
+ngood.result.lda <- lda.collapsed.gibbs.sampler(ngood.ldaform$documents,
+                                                K = 8,
+                                                vocab = ngood.ldaform$vocab,
+                                                num.iterations = 1000,
+                                                burnin = 1000,
+                                                alpha = 0.01,
+                                                eta = 0.01)
+write_rds(ngood.result.lda,'complete/ngood.result.lda.rds')
+
+nbad.ldaform <- dtm2ldaformat(nbad.dtm, omit_empty=F)
+nbad.result.lda <- lda.collapsed.gibbs.sampler(nbad.ldaform$documents,
+                                               K = 8,
+                                               vocab = nbad.ldaform$vocab,
+                                               num.iterations = 1000,
+                                               burnin = 1000,
+                                               alpha = 0.01,
+                                               eta = 0.01)
+write_rds(nbad.result.lda,'complete/nbad.result.lda.rds')
+```
+
+## **news & cafe topic words and freq**
+#### news토픽 top words 뽑기
+```{r, eval=FALSE}
+newsgood.topic.words <- top.topic.words(ngood.result.lda$topics, 10, by.score=T)
+newsbad.topic.words <- top.topic.words(nbad.result.lda$topics, 10, by.score=T)
+newsgood.topic.words
+newsbad.topic.words
+```
+
+#### 분석을 위해 idf 계산하기
+#### 빈출 단어만 간추리기
+```{r, eval=FALSE}
+word.count1 = as.array(rollup(ngood.TDM.tf2,2))   #매트릭스 행별 합계구하기
+word.order1 = order(word.count1, decreasing = T)[1:1000] #많이 쓰인 단어 순서정리(단어번호)
+freq.word1 = word.order1[1:1000]  #상위 1000개 단어만 재할당(단어번호)
+ngood1.mat = as.matrix(ngood.TDM.tf2[freq.word1,]) #매트릭스로 변환
+ngood1.w = lw_bintf(ngood1.mat)*gw_idf(ngood1.mat)  # 가중치 계산 tf값 = bintf(사용되었음 1, 아님0으로 가중치)
+
+word.count2 = as.array(rollup(nbad.TDM.tf2,2))   #매트릭스 행별 합계구하기
+word.order2 = order(word.count2, decreasing = T)[1:1000] #많이 쓰인 단어 순서정리(단어번호)
+freq.word2 = word.order2[1:1000]  #상위 1000개 단어만 재할당(단어번호)
+nbad.mat = as.matrix(nbad.TDM.tf2[freq.word2,]) #매트릭스로 변환
+nbad.w = lw_bintf(nbad.mat)*gw_idf(nbad.mat)  # 가중치 계산 tf값 = bintf(사용되었음 1, 아님0으로 가중치)
+
+wordcount <- rowSums(ngood1.w) # 각 단어별 합계를 구함
+wordorder <- order(wordcount, decreasing=T)
+freqwords <- ngood1.w[wordorder[1:50],] # TDM에서 자주 쓰인 단어 상위 50개에 해당하는 것만 추출
+
+wordcount2 <- rowSums(nbad.w) # 각 단어별 합계를 구함
+wordorder2 <- order(wordcount2, decreasing=T)
+freqwords2 <- nbad.w[wordorder2[1:50],] # TDM에서 자주 쓰인 단어 상위 50개에 해당하는 것만 추출
+```
+
+#### 키워드 분석(bar 차트 및 파이차트로 비중 나타내기 또는 워드클라우드)
+```{r, eval=FALSE}
+freq <- rowSums(freqwords)
+freqwords22 <- cbind(freqwords,freq)
+freqwords33 <- as.data.frame(freqwords22[,dim(freqwords22)[2]])
+keywords <- rownames(freqwords33)
+freqwords44 <- data.frame("keyword"=keywords,"freq"=freq)
+rownames(freqwords44) <- 1:50
+p <- ggplot(freqwords44,aes(reorder(keyword,freqwords44$freq),freq))+geom_bar(stat="identity")+xlab("키워드")+
+  ylab("빈도(TF-IDF)")+coord_flip()+theme(axis.title.x=element_text(size=10,face='bold'),
+                                        axis.title.y=element_text(size=10,face='bold'),
+                                        axis.text.x=element_text(size=10,face='bold'),
+                                        axis.text.y=element_text(size=10,face='bold'))
+ggsave(plot=p , filename='freqword_news_good.png',dpi=300)
+
+freq2 <- rowSums(freqwords2)
+freqwords222 <- cbind(freqwords2,freq2)
+freqwords333 <- as.data.frame(freqwords222[,dim(freqwords222)[2]])
+keywords2 <- rownames(freqwords333)
+freqwords444 <- data.frame("keyword"=keywords2,"freq"=freq2)
+rownames(freqwords444) <- 1:50
+p <- ggplot(freqwords444,aes(reorder(keyword,freqwords444$freq),freq))+geom_bar(stat="identity")+xlab("키워드")+
+  ylab("빈도(TF-IDF)")+coord_flip()+theme(axis.title.x=element_text(size=10,face='bold'),
+                                        axis.title.y=element_text(size=10,face='bold'),
+                                        axis.text.x=element_text(size=10,face='bold'),
+                                        axis.text.y=element_text(size=10,face='bold'))
+ggsave(plot=p , filename='freqword_news_bad.png',dpi=300)
+
+```

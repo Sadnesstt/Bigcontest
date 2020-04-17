@@ -1,0 +1,27 @@
+## **미세먼지 농도에 따른 공기청정기 및 마스크의 쇼핑 검색어 트렌드 그래프 그리기**
+```{r}
+library(tidyverse)
+library(psycho)
+shopping <- read_csv('pre/shoppingInsight.csv')
+dust_complete_datemean.rds <- read_rds('complete/dust_complete_datemean.rds')
+shopping[is.na(shopping)] <- 0 
+shopping$DT <- as.character(shopping$DT)
+shopping$DT <- as.Date(shopping$DT)
+
+dust_day_mean <- dust_complete_datemean.rds %>% group_by(DT) %>% summarise(m_pm10=mean(pm10,na.rm=T), m_pm25=mean(pm25,na.rm=T))
+dust_day_mean$DT <- parse_date(as.character(dust_day_mean$DT), "%Y%m%d")
+dust_day_shop <- dust_day_mean%>% left_join(shopping,by="DT")
+z_dust_day_shop_naver <- dust_day_shop[,-1] %>% standardize()
+z_dust_day_shop_naver$DT <- dust_day_shop$DT
+write_rds(z_dust_day_shop_naver, 'complete/z_dust_day_shop_naver.rds')
+head(z_dust_day_shop_naver)
+
+p <- z_dust_day_shop_naver %>% gather('m_pm10','m_pm25','mask','air_cleaner',key="id",value="value")%>%ggplot(aes(x=DT,y=value,col=id))+geom_line(aes(group=id))+
+  xlab('DATE')+ylab('VALUE')+ggtitle('Dust with mask and air_cleaner search trend')+theme(plot.title=element_text(size=20,face='bold'),axis.title.x=element_text(size=10,face='bold'),
+                                                                                          axis.title.y=element_text(size=10,face='bold'),
+                                                                                          axis.text.x=element_text(size=10,face='bold'),
+                                                                                          axis.text.y=element_text(size=10,face='bold'))
+print(p)
+ggsave(plot = p, filename = "Dust with mask and air_cleaner search trend.png", dpi=300)
+
+```

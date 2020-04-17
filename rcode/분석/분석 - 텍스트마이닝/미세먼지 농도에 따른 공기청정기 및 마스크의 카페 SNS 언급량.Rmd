@@ -1,0 +1,112 @@
+## **미세먼지 농도에 따른 공기청정기 및 마스크의 카페 SNS 언급량**
+```{r}
+library(tidyverse)
+library(rJava)
+library(tm)
+library(KoNLP)
+library(psycho)
+mydata <- list.files('complete/cafe_tdm',pattern='.rds')
+for (i in 1:length(mydata)){
+  assign(mydata[i], read_rds(paste0('complete/cafe_tdm/',mydata[i])))
+}
+dust_complete_datemean.rds <- read_rds('complete/dust_complete_datemean.rds')
+dust_day_mean <- dust_complete_datemean.rds %>% group_by(DT) %>% summarise(m_pm10=mean(pm10,na.rm=T), m_pm25=mean(pm25,na.rm=T))
+dust_day_mean$DT <- parse_date(as.character(dust_day_mean$DT), "%Y%m%d")
+
+```
+
+#### sparse term 줄이기
+```{r}
+cafe1.TDM.tf2 <- removeSparseTerms(cafe1.TDM.tf.rds,sparse=0.99)
+cafe2.TDM.tf2 <- removeSparseTerms(cafe2.TDM.tf.rds,sparse=0.99)
+cafe3.TDM.tf2 <- removeSparseTerms(cafe3.TDM.tf.rds,sparse=0.99)
+cafe4.TDM.tf2 <- removeSparseTerms(cafe4.TDM.tf.rds,sparse=0.99)
+cafe5.TDM.tf2 <- removeSparseTerms(cafe5.TDM.tf.rds,sparse=0.99)
+cafe6.TDM.tf2 <- removeSparseTerms(cafe6.TDM.tf.rds,sparse=0.99)
+cafe7.TDM.tf2 <- removeSparseTerms(cafe7.TDM.tf.rds,sparse=0.99)
+cafe8.TDM.tf2 <- removeSparseTerms(cafe8.TDM.tf.rds,sparse=0.99)
+cafe9.TDM.tf2 <- removeSparseTerms(cafe9.TDM.tf.rds,sparse=0.99)
+cafe10.TDM.tf2 <- removeSparseTerms(cafe10.TDM.tf.rds,sparse=0.99)
+cafe11.TDM.tf2 <- removeSparseTerms(cafe11.TDM.tf.rds,sparse=0.99)
+cafe12.TDM.tf2 <- removeSparseTerms(cafe12.TDM.tf.rds,sparse=0.99)
+
+
+cafe1.mat <- as.matrix(cafe1.TDM.tf2)
+cafe2.mat <- as.matrix(cafe2.TDM.tf2)
+cafe3.mat <- as.matrix(cafe3.TDM.tf2)
+cafe4.mat <- as.matrix(cafe4.TDM.tf2)
+cafe5.mat <- as.matrix(cafe5.TDM.tf2)
+cafe6.mat <- as.matrix(cafe6.TDM.tf2)
+cafe7.mat <- as.matrix(cafe7.TDM.tf2)
+cafe8.mat <- as.matrix(cafe8.TDM.tf2)
+cafe9.mat <- as.matrix(cafe9.TDM.tf2)
+cafe10.mat <- as.matrix(cafe10.TDM.tf2)
+cafe11.mat <- as.matrix(cafe11.TDM.tf2)
+cafe12.mat <- as.matrix(cafe12.TDM.tf2)
+
+
+cafe1.dtm <- t(cafe1.mat)
+cafe2.dtm <- t(cafe2.mat)
+cafe3.dtm <- t(cafe3.mat)
+cafe4.dtm <- t(cafe4.mat)
+cafe5.dtm <- t(cafe5.mat)
+cafe6.dtm <- t(cafe6.mat)
+cafe7.dtm <- t(cafe7.mat)
+cafe8.dtm <- t(cafe8.mat)
+cafe9.dtm <- t(cafe9.mat)
+cafe10.dtm <- t(cafe10.mat)
+cafe11.dtm <- t(cafe11.mat)
+cafe12.dtm <- t(cafe12.mat)
+
+cafe1.dtm <- as_tibble(cafe1.dtm)
+cafe2.dtm <- as_tibble(cafe2.dtm)
+cafe3.dtm <- as_tibble(cafe3.dtm)
+cafe4.dtm <- as_tibble(cafe4.dtm)
+cafe5.dtm <- as_tibble(cafe5.dtm)
+cafe6.dtm <- as_tibble(cafe6.dtm)
+cafe7.dtm <- as_tibble(cafe7.dtm)
+cafe8.dtm <- as_tibble(cafe8.dtm)
+cafe9.dtm <- as_tibble(cafe9.dtm)
+cafe10.dtm <- as_tibble(cafe10.dtm)
+cafe11.dtm <- as_tibble(cafe11.dtm)
+cafe12.dtm <- as_tibble(cafe12.dtm)
+
+cafe_list <- list(cafe1.dtm,cafe2.dtm,cafe3.dtm,cafe4.dtm,cafe5.dtm,cafe6.dtm,
+                  cafe7.dtm,cafe8.dtm,cafe9.dtm,cafe10.dtm,cafe11.dtm,cafe12.dtm)
+cafe <- read_rds('complete/cafe_preprocessed.rds')
+
+cafe_keyword <- function(i){
+  cafe_month <- cafe %>% filter(month==i)
+  date <- cafe_month %>% mutate(month2=ifelse(month>=10, month, paste0("0",month)),
+                                day2 = ifelse(day>=10, day, paste0("0",day))) %>% unite(DT, c(year,month2,day2),sep="") %>% select(DT)
+  date <- date$DT
+  date <- parse_date(date,"%Y%m%d")
+  cafe_list[[i]]$date <- date
+  tb <- cafe_list[[i]] %>% select(`공기청정기`,`마스크`,date) %>% group_by(date) %>% summarise(num_air_cleaner=sum(`공기청정기`),
+                                                                                       num_mask =sum(`마스크`))
+  return(tb)
+}
+keyword <- paste0("keyword_cafe",1:12)
+for(i in 1:length(cafe_list)){
+  assign(keyword[i], cafe_keyword(i))
+}
+
+keyword_list <- list(keyword_cafe4,keyword_cafe5,keyword_cafe6,
+                     keyword_cafe7,keyword_cafe8,keyword_cafe9,keyword_cafe10,keyword_cafe11,keyword_cafe12,keyword_cafe1,keyword_cafe2,keyword_cafe3)
+cafe_wordused <- do.call(rbind,keyword_list)
+dust_cafe <- left_join(dust_day_mean ,cafe_wordused,by=c("DT"="date"))
+z_cafe <- dust_cafe[,-1] %>% standardize()
+z_cafe$DT <- dust_cafe$DT
+write_rds(z_cafe, 'complete/z_cafe.rds')
+head(z_cafe)
+
+
+g1 <- z_cafe %>% gather('m_pm10','m_pm25','num_air_cleaner','num_mask',key="id",value="value") %>% ggplot(aes(DT,value,col=id,group=id))+geom_line()+xlab('DATE')+ylab('Word_used')+
+  ggtitle("Cafe Dust with mask and air_cleaner used")+theme(plot.title=element_text(size=20,face='bold'),axis.title.x=element_text(size=10,face='bold'),
+                                                            axis.title.y=element_text(size=10,face='bold'),
+                                                            axis.text.x=element_text(size=10,face='bold'),
+                                                            axis.text.y=element_text(size=10,face='bold'))
+print(g1)
+ggsave(plot = g1 , filename = "Cafe Dust with mask and air_cleaner used.png", dpi=300)
+
+```
