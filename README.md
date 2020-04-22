@@ -15,6 +15,3 @@ innovation 분야
 결과 : 최우수상(GS 리테일상) 수상
 
 2차 발표 : GS리테일 본사 데이터사이언스 팀에서 2차 발표
-
-
-[test](https://drive.google.com/file/d/147NAygRriU4pKpMBfER-S__KzgcjRrIb/view?usp=sharing)
