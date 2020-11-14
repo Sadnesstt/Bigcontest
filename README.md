@@ -12,11 +12,11 @@
 
 [공모전 설명회](https://iewha-my.sharepoint.com/:b:/g/personal/192stg11_i_ewha_ac_kr/EZFaT5Cf7vJPsOuLVfUAAN8BxSJIcEaqKLpuBMv1W0PV_w?e=3KFbUM)
 
-[최종 보고서](https://iewha-my.sharepoint.com/:b:/g/personal/192stg11_i_ewha_ac_kr/EU7SxQmfTZVPucWxjNv1ZgcBJT_hqlkId88bXZy4jKJ9yw?e=p7ck39)
+[최종 보고서(GS리테일 본사발표 수정본)](https://iewha-my.sharepoint.com/:b:/g/personal/192stg11_i_ewha_ac_kr/EU7SxQmfTZVPucWxjNv1ZgcBJT_hqlkId88bXZy4jKJ9yw?e=p7ck39)
 
 [소개 및 역할분담](https://iewha-my.sharepoint.com/:b:/g/personal/192stg11_i_ewha_ac_kr/EdzkTCAYt59KjSroG4PpEdABSK-TKO65k7z_1YTurleR5g?e=kxw2Ha)
 
 
 결과 : 최우수상(GS 리테일상) 수상, 300만원 상금
 
-2차 발표 : GS리테일 본사 데이터사이언스 팀에서 2차 발표(위의 GS발표 자료 폴더의 png 파일)
+2차 발표 : GS리테일 본사 데이터사이언스 팀에서 2차 발표
