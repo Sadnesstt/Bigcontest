@@ -1,4 +1,3 @@
-# Bigcontest
 # 제 7회 데이터 분석 경진대회 2019 빅콘테스트 innovation 분야 최우수상(GS리테일상) 수상작
 [최종보고서](https://drive.google.com/file/d/18MR66cm9ddlI2CfiuMmbl3C9_05Veg_U/view)
 - 진행기간 : 2019.07.23 ~ 2019.09.10
